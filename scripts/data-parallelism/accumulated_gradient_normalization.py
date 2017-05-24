@@ -18,7 +18,6 @@ import sys
 def main():
     # Fetch the settings from the specified arguments.
     settings = process_arguments()
-    print(settings)
 
 
 def help():
@@ -50,6 +49,9 @@ def help():
 '''
     print(logo)
     print("Basic usage:\n    python agn.py -w\t\tRun as a worker.\n    python agn.py -ps\t\tRun as a parameter server.\n")
+    print("Required arguments:")
+    print("    --worker-hosts [string]\tComma-separated list defining the worker hosts.")
+    print("    --ps-hosts [string]\t\tComma-separated list defining the parameter server hosts.\n")
     print("Optional arguments:")
     print("    --lambda [int]\t\tCommunication frequency\n\t\t\t\tExploration steps before communicating with the parameter server.")
     print("    --epochs [int]\t\tNumber of epochs.\n\t\t\t\tNumber of full data iterations.")
@@ -62,14 +64,31 @@ def argument_value(key):
     """Obtains the value of the specified program argument."""
     index = sys.argv.index(key)
 
-    return int(sys.argv[index + 1])
+    return sys.argv[index + 1]
 
 
 def validate_settings(settings):
     """Validates the program settings, and exits on failure."""
 
+    # Check if the worker or parameter server flag has been specified.
     if not settings['worker'] and not settings['ps']:
+        print("Please specify a worker '-w' or a parameter server '-ps' flag.")
         help()
+    # Check if the host / ps hosts have been specified.
+    if 'worker-hosts' not in settings or 'ps-hosts' not in settings:
+        print("Please specify the worker and parameter server hosts.")
+        help()
+
+
+def format_settings(settings):
+    """Formats the settings to the expected structure, and converts the
+    program arguments to the correct types.
+    """
+    settings['lambda'] = int(settings['lambda'])
+    settings['epochs'] = int(settings['epochs'])
+    settings['mini-batch'] = int(settings['mini-batch'])
+    settings['worker-hosts'] = settings['worker-hosts'].split(",")
+    settings['ps-hosts'] = settings['ps-hosts'].split(",")
 
 
 def process_arguments():
@@ -92,8 +111,11 @@ def process_arguments():
         if '--lambda' in sys.argv: settings['communication-frequency'] = argument_value('--lambda')
         if '--epochs' in sys.argv: settings['epochs'] = argument_value('--epochs')
         if '--mini-batch' in sys.argv: settings['mini-batch'] = argument_value('--mini-batch')
-        # Validate the settings.
+        if '--worker-hosts' in sys.argv: settings['worker-hosts'] = argument_value('--worker-hosts')
+        if '--ps-hosts' in sys.argv: settings['ps-hosts'] = argument_value('--ps-hosts')
         validate_settings(settings)
+        format_settings(settings)
+
 
     return settings
 
