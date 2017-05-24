@@ -17,7 +17,14 @@ import sys
 
 def execute_worker(settings):
     """Executes the worker procedure."""
-    raise NotImplementedError
+    # Obtain the task variables from the settings.
+    task_index = settings['task-index']
+    cluster_specification = settings['cluster-specification']
+    server = settings['server']
+    # Build the computation graph.
+    with tf.device(tf.train.replica_device_setter(worker_device="/job:worker/task:%d" % task_index,
+                                                  cluster=cluster_specification)):
+        pass
 
 
 def execute_server(settings):
@@ -104,8 +111,8 @@ def help():
     print("Basic usage:\n    python agn.py -w\t\tRun as a worker.\n    python agn.py -ps\t\tRun as a parameter server.\n")
     print("Required arguments:")
     print("    --worker-hosts [string]\tComma-separated list defining the worker hosts.")
-    print("    --ps-hosts [string]\t\tComma-separated list defining the parameter server hosts.\n")
-    print("    --task-index [int]\tTask index associated with the worker or PS.")
+    print("    --ps-hosts [string]\t\tComma-separated list defining the parameter server hosts.")
+    print("    --task-index [int]\tTask index associated with the worker or PS.\n")
     print("Optional arguments:")
     print("    --lambda [int]\t\tCommunication frequency\n\t\t\t\tExploration steps before communicating with the parameter server.")
     print("    --epochs [int]\t\tNumber of epochs.\n\t\t\t\tNumber of full data iterations.")
