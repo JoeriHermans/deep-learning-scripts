@@ -8,8 +8,11 @@ Date:      21 May, 2017
 
 import numpy as np
 import os
-import tensorflow as tf
 import sys
+import tensorflow as tf
+import time
+
+from tensorflow.examples.tutorials.mnist import input_data
 
 
 def execute_worker(settings):
@@ -19,64 +22,96 @@ def execute_worker(settings):
     cluster_specification = settings['cluster-specification']
     server = settings['server']
     num_epochs = settings['epochs']
-    mini_batch_size = settings['mini-batch']
+    batch_size = settings['mini-batch']
+    log_path = settings['log-path']
+
     # Build the computation graph.
     with tf.device(tf.train.replica_device_setter(worker_device="/job:worker/task:%d" % task_index,
+                                                  ps_device="/job:ps",
                                                   cluster=cluster_specification)):
+        # count the number of updates
+        global_step = tf.get_variable('global_step', [], initializer = tf.constant_initializer(0, dtype=tf.int64),  trainable = False)
+        # input images
+        with tf.name_scope('input'):
+            # None -> batch size can be any size, 784 -> flattened mnist image
+            x = tf.placeholder(tf.float32, shape=[None, 784], name="x-input")
+            # target 10 output classes
+            y_ = tf.placeholder(tf.float32, shape=[None, 10], name="y-input")
 
-        # Initialize the global step counter.
-        global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0, dtype=tf.int64), trainable=False)
-        # Network structure will be as follows:
-        # 784 (input)
-        # 2000 (hidden-1, relu activations)
-        # 2000 (hidden-2, relu activations)
-        # 10 (output, softmax)
+        # model parameters will change during training so we use tf.Variable
+        tf.set_random_seed(1)
+        with tf.name_scope("weights"):
+            W1 = tf.Variable(tf.random_normal([784, 100]))
+            W2 = tf.Variable(tf.random_normal([100, 10]))
 
-        # Construct the input of the network.
-        with tf.name_scope("input"):
-            x = tf.placeholder(tf.float32, shape=[None, 784], name='input')
-            y_target = tf.placeholder(tf.float32, shape=[None, 10], name='target')
+        with tf.name_scope("biases"):
+            b1 = tf.Variable(tf.zeros([100]))
+            b2 = tf.Variable(tf.zeros([10]))
 
-        # Construct the parameters.
-        with tf.name_scope("parameters"):
-            W_1 = tf.Variable(tf.random_normal([784, 2000]))
-            b_1 = tf.Variable(tf.zeros([2000]))
-            W_2 = tf.Variable(tf.random_normal([2000, 2000]))
-            b_2 = tf.Variable(tf.zeros([2000]))
-            W_3 = tf.Variable(tf.random_normal([2000, 10]))
-            b_3 = tf.Variable(tf.zeros([10]))
+        # implement model
+        with tf.name_scope("softmax"):
+            # y is our prediction
+            z2 = tf.add(tf.matmul(x,W1),b1)
+            a2 = tf.nn.sigmoid(z2)
+            z3 = tf.add(tf.matmul(a2,W2),b2)
+            y  = tf.nn.softmax(z3)
 
-        # Define the training procedure.
-        with tf.name_scope("train"):
-            # Compute activations of the first hidden layer.
-            z_1 = tf.add(tf.matmul(x, W_1), b_1)
-            a_1 = tf.nn.relu(z_1)
-            # Compute activations of the second hidden layer.
-            z_2 = tf.add(tf.matmul(a_1, W_2), b_2)
-            a_2 = tf.nn.relu(z_2)
-            # Compute the predictions of the neural network.
-            z_3 = tf.add(tf.matmul(a_2, W_3), b_3)
-            y = tf.nn.softmax(z_3)
-            # Define the cross entropy.
-            cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_target, logits=y))
-            # Define the optimizer, and its operations.
-            optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-            gradients = optimizer.compute_gradients(cross_entropy)
-            apply_gradient_op = optimizer.apply_gradients(gradients, global_step=global_step)
+        # specify cost function
+        with tf.name_scope('cross_entropy'):
+            # this is our cost
+            cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
 
-        with tf.name_scope('accuracy'):
-            correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_target, 1))
+        # specify optimizer
+        with tf.name_scope('train'):
+            # optimizer is an "operation" which we can execute in a session
+            grad_op = tf.train.AdamOptimizer(0.0001)
+            train_op = grad_op.minimize(cross_entropy, global_step=global_step)
+
+        with tf.name_scope('Accuracy'):
+            # accuracy
+            correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-        tf.summary.scalar("loss", cross_entropy)
-        tf.summary.scalar("accuracy", accuracy)
+            # create a summary for our cost and accuracy
+    tf.summary.scalar("cost", cross_entropy)
+    tf.summary.scalar("accuracy", accuracy)
 
-        summary_op = tf.summary.merge_all()
-        init_op = tf.global_variables_initializer()
+    summary_op = tf.summary.merge_all()
+    init_op = tf.global_variables_initializer()
+    supervisor = tf.train.Supervisor(is_chief=(task_index == 0), global_step=global_step, init_op=init_op, logdir=log_path)
 
-    supervisor = tf.train.Supervisor(is_chief=(task_index == 0), global_step=global_step, init_op=init_op)
-    with supervisor.prepare_or_wait_for_session(server.target) as sess:
-        writer = tf.train.SummaryWriter()
+    # Read / obtain the MNIST dataset.
+    mnist = input_data.read_data_sets('mnist_data', one_hot=True)
+
+    frequency = 100
+    tf_config = tf.ConfigProto(intra_op_parallelism_threads=14, inter_op_parallelism_threads=14)
+    with supervisor.prepare_or_wait_for_session(server.target, config=tf_config) as sess:
+        # create log writer object (this will log on every machine)
+        writer = tf.summary.FileWriter(log_path, graph=tf.get_default_graph())
+        # perform training cycles
+        start_time = time.time()
+        for epoch in range(num_epochs):
+            # number of batches in one epoch
+            batch_count = int(mnist.train.num_examples/batch_size)
+
+            count = 0
+            for i in range(batch_count):
+                batch_x, batch_y = mnist.train.next_batch(batch_size)
+
+                # perform the operations we defined earlier on batch
+                _, cost, summary, step = sess.run([train_op, cross_entropy, summary_op, global_step], feed_dict={x: batch_x, y_: batch_y})
+                writer.add_summary(summary, step)
+
+                count += 1
+                if count % frequency == 0 or i+1 == batch_count:
+                    elapsed_time = time.time() - start_time
+                    start_time = time.time()
+                    print("Step: %d," % (step+1),
+                          " Epoch: %2d," % (epoch+1),
+                          " Batch: %3d of %3d," % (i+1, batch_count),
+                          " Cost: %.4f," % cost,
+                          " AvgTime: %3.2fms" % float(elapsed_time*1000/frequency))
+                    count = 0
 
 
 def execute_server(settings):
