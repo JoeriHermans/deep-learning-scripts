@@ -14,6 +14,18 @@ import os
 import tensorflow as tf
 import sys
 
+
+def execute_worker(settings):
+    """Executes the worker procedure."""
+    raise NotImplementedError
+
+
+def execute_server(settings):
+    """Executes the server procedure."""
+    server = settings['server']
+    server.join()
+
+
 def construct_cluster_specification(settings):
     """Constructs the cluster specification from the validated settings."""
     workers = settings['worker-hosts']
@@ -21,6 +33,18 @@ def construct_cluster_specification(settings):
     cluster_specification = tf.train.ClusterSpec({"worker": workers, "ps": parameter_servers})
 
     return cluster_specification
+
+
+def construct_server(settings):
+    """Starts a server which will handle the local task."""
+    # Obtain the required parameters from the settings.
+    cluster_specification = settings['cluster-specification']
+    job_name = settings['job-name']
+    task_index = settings['task-index']
+    # Allocate the server, with the required arguments.
+    server = tf.train.Server(cluster_specification, job_name, task_index)
+
+    return server
 
 
 def running_worker(settings):
@@ -33,15 +57,20 @@ def main():
     """Main entry point of the distributed training script."""
     # Fetch the settings from the specified arguments.
     settings = process_arguments()
-    # Construct the cluster specification.
+    # Construct the cluster specification, and server.
     cluster_specification = construct_cluster_specification(settings)
+    server = construct_server(settings)
+    # Add the cluster specification and server to the settings.
+    settings['cluster_specification'] = cluster_specification
+    settings['server'] = server
+    # TODO Add building of model.
     # Check if the user initiated the parameter server, or worker procedure.
     if running_worker(settings):
-        # TODO Start the worker procedure.
-        raise NotImplementedError
+        # Run the worker procedure.
+        execute_worker(settings)
     else:
-        # TODO Start the parameter server procedure.
-        raise NotImplementedError
+        # Run the server procedure.
+        execute_server(settings)
 
 
 def help():
@@ -113,12 +142,19 @@ def format_settings(settings):
     """Formats the settings to the expected structure, and converts the
     program arguments to the correct types.
     """
+    # Format the provided arguments.
     settings['lambda'] = int(settings['lambda'])
     settings['epochs'] = int(settings['epochs'])
     settings['mini-batch'] = int(settings['mini-batch'])
     settings['worker-hosts'] = settings['worker-hosts'].split(",")
     settings['ps-hosts'] = settings['ps-hosts'].split(",")
     settings['task-index'] = int(settings['task-index'])
+    # Set the job name, given the formatted settings.
+    if running_worker(settings):
+        job_name = "worker"
+    else:
+        job_name = "ps"
+    settings['job-name'] = job_name
 
 
 def process_arguments():
