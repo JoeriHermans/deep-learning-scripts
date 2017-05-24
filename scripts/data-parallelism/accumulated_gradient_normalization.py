@@ -14,10 +14,34 @@ import os
 import tensorflow as tf
 import sys
 
+def construct_cluster_specification(settings):
+    """Constructs the cluster specification from the validated settings."""
+    workers = settings['worker-hosts']
+    parameter_servers = settings['ps-hosts']
+    cluster_specification = tf.train.ClusterSpec({"worker": workers, "ps": parameter_servers})
+
+    return cluster_specification
+
+
+def running_worker(settings):
+    """Check if the user initiated the worker script, given the settings."""
+
+    return settings['worker']
+
 
 def main():
+    """Main entry point of the distributed training script."""
     # Fetch the settings from the specified arguments.
     settings = process_arguments()
+    # Construct the cluster specification.
+    cluster_specification = construct_cluster_specification(settings)
+    # Check if the user initiated the parameter server, or worker procedure.
+    if running_worker(settings):
+        # TODO Start the worker procedure.
+        raise NotImplementedError
+    else:
+        # TODO Start the parameter server procedure.
+        raise NotImplementedError
 
 
 def help():
@@ -52,6 +76,7 @@ def help():
     print("Required arguments:")
     print("    --worker-hosts [string]\tComma-separated list defining the worker hosts.")
     print("    --ps-hosts [string]\t\tComma-separated list defining the parameter server hosts.\n")
+    print("    --task-index [int]\tTask index associated with the worker or PS.")
     print("Optional arguments:")
     print("    --lambda [int]\t\tCommunication frequency\n\t\t\t\tExploration steps before communicating with the parameter server.")
     print("    --epochs [int]\t\tNumber of epochs.\n\t\t\t\tNumber of full data iterations.")
@@ -78,6 +103,10 @@ def validate_settings(settings):
     if 'worker-hosts' not in settings or 'ps-hosts' not in settings:
         print("Please specify the worker and parameter server hosts.")
         help()
+    # Check if a task index has been specified.
+    if 'task-index' not in settings:
+        print("Please specify a task index.")
+        help()
 
 
 def format_settings(settings):
@@ -89,6 +118,7 @@ def format_settings(settings):
     settings['mini-batch'] = int(settings['mini-batch'])
     settings['worker-hosts'] = settings['worker-hosts'].split(",")
     settings['ps-hosts'] = settings['ps-hosts'].split(",")
+    settings['task-index'] = int(settings['task-index'])
 
 
 def process_arguments():
@@ -113,6 +143,7 @@ def process_arguments():
         if '--mini-batch' in sys.argv: settings['mini-batch'] = argument_value('--mini-batch')
         if '--worker-hosts' in sys.argv: settings['worker-hosts'] = argument_value('--worker-hosts')
         if '--ps-hosts' in sys.argv: settings['ps-hosts'] = argument_value('--ps-hosts')
+        if '--task-index' in sys.argv: settings['task-index'] = argument_value('--task-index')
         validate_settings(settings)
         format_settings(settings)
 
