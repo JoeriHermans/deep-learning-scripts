@@ -76,7 +76,7 @@ def execute_worker(settings):
 
     supervisor = tf.train.Supervisor(is_chief=(task_index == 0), global_step=global_step, init_op=init_op)
     with supervisor.prepare_or_wait_for_session(server.target) as sess:
-        raise NotImplementedError
+        writer = tf.train.SummaryWriter()
 
 
 def execute_server(settings):
@@ -166,6 +166,7 @@ def help():
     print("Optional arguments:")
     print("    --epochs [int]\t\tNumber of epochs.\n\t\t\t\tNumber of full data iterations.")
     print("    --mini-batch [int]\t\tMini-batch size.")
+    print("    --log-path [string]\t\tSpecifies the log-file on every machine.\n\t\t\t\tDefault: /tmp/tensorflow-logs/downpour")
     print("\n\n")
     exit(1)
 
@@ -225,6 +226,7 @@ def process_arguments():
         # Set the default values.
         settings['epochs'] = 1
         settings['mini-batch'] = 32
+        settings['log-path'] = '/tmp/tensorflow-logs/downpour'
         # Obtain the variables from the program arguments.
         settings['worker'] = '-w' in sys.argv
         settings['ps'] = '-ps' in sys.argv
@@ -234,6 +236,7 @@ def process_arguments():
         if '--worker-hosts' in sys.argv: settings['worker-hosts'] = argument_value('--worker-hosts')
         if '--ps-hosts' in sys.argv: settings['ps-hosts'] = argument_value('--ps-hosts')
         if '--task-index' in sys.argv: settings['task-index'] = argument_value('--task-index')
+        if '--log-path' in sys.argv: settings['log-path'] = argument_value('--log-path')
         validate_settings(settings)
         format_settings(settings)
 
