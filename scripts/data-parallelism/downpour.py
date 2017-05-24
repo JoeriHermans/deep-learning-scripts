@@ -24,7 +24,7 @@ def execute_worker(settings):
                                                   cluster=cluster_specification)):
 
         # Initialize the global step counter.
-        global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
+        global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0, dtype=tf.int64), trainable=False)
         # Network structure will be as follows:
         # 784 (input)
         # 2000 (hidden-1, relu activations)
@@ -48,7 +48,7 @@ def execute_worker(settings):
         # Define the training procedure.
         with tf.name_scope("train"):
             # Compute activations of the first hidden layer.
-            z_1 = tf.add(tf.matmul(x, W1), b_1)
+            z_1 = tf.add(tf.matmul(x, W_1), b_1)
             a_1 = tf.nn.relu(z_1)
             # Compute activations of the second hidden layer.
             z_2 = tf.add(tf.matmul(a_1, W_2), b_2)
@@ -62,6 +62,20 @@ def execute_worker(settings):
             optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
             gradients = optimizer.compute_gradients(cross_entropy)
             apply_gradient_op = optimizer.apply_gradients(gradients, global_step=global_step)
+
+        with tf.name_scope('accuracy'):
+            correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_target, 1))
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+        tf.summary.scalar("loss", cross_entropy)
+        tf.summary.scalar("accuracy", accuracy)
+
+        summary_op = tf.summary.merge_all()
+        init_op = tf.global_variables_initializer()
+
+    supervisor = tf.train.Supervisor(is_chief=(task_index == 0), global_step=global_step, init_op=init_op)
+    with supervisor.prepare_or_wait_for_session(server.target) as sess:
+        raise NotImplementedError
 
 
 def execute_server(settings):
@@ -103,11 +117,9 @@ def main():
     settings = process_arguments()
     # Construct the cluster specification, and server.
     cluster_specification = construct_cluster_specification(settings)
+    settings['cluster-specification'] = cluster_specification
     server = construct_server(settings)
-    # Add the cluster specification and server to the settings.
-    settings['cluster_specification'] = cluster_specification
     settings['server'] = server
-    # TODO Add building of model.
     # Check if the user initiated the parameter server, or worker procedure.
     if running_worker(settings):
         # Run the worker procedure.
@@ -192,6 +204,7 @@ def format_settings(settings):
     settings['mini-batch'] = int(settings['mini-batch'])
     settings['worker-hosts'] = settings['worker-hosts'].split(",")
     settings['ps-hosts'] = settings['ps-hosts'].split(",")
+    # Check if task-index has been specified.
     settings['task-index'] = int(settings['task-index'])
     # Set the job name, given the formatted settings.
     if running_worker(settings):
