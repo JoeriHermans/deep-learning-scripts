@@ -18,7 +18,8 @@ def execute_worker(settings):
     task_index = settings['task-index']
     cluster_specification = settings['cluster-specification']
     server = settings['server']
-    communication_frequency = settings['lambda']
+    num_epochs = settings['epochs']
+    mini_batch_size = settings['mini-batch']
     # Build the computation graph.
     with tf.device(tf.train.replica_device_setter(worker_device="/job:worker/task:%d" % task_index,
                                                   cluster=cluster_specification)):
@@ -163,7 +164,6 @@ def help():
     print("    --ps-hosts [string]\t\tComma-separated list defining the parameter server hosts.")
     print("    --task-index [int]\tTask index associated with the worker or PS.\n")
     print("Optional arguments:")
-    print("    --lambda [int]\t\tCommunication frequency\n\t\t\t\tExploration steps before communicating with the parameter server.")
     print("    --epochs [int]\t\tNumber of epochs.\n\t\t\t\tNumber of full data iterations.")
     print("    --mini-batch [int]\t\tMini-batch size.")
     print("\n\n")
@@ -199,7 +199,6 @@ def format_settings(settings):
     program arguments to the correct types.
     """
     # Format the provided arguments.
-    settings['lambda'] = int(settings['lambda'])
     settings['epochs'] = int(settings['epochs'])
     settings['mini-batch'] = int(settings['mini-batch'])
     settings['worker-hosts'] = settings['worker-hosts'].split(",")
@@ -224,14 +223,12 @@ def process_arguments():
     else:
         settings = {}
         # Set the default values.
-        settings['lambda'] = 15 # Communication frequency.
         settings['epochs'] = 1
         settings['mini-batch'] = 32
         # Obtain the variables from the program arguments.
         settings['worker'] = '-w' in sys.argv
         settings['ps'] = '-ps' in sys.argv
         # Check for a different communication frequency.
-        if '--lambda' in sys.argv: settings['communication-frequency'] = argument_value('--lambda')
         if '--epochs' in sys.argv: settings['epochs'] = argument_value('--epochs')
         if '--mini-batch' in sys.argv: settings['mini-batch'] = argument_value('--mini-batch')
         if '--worker-hosts' in sys.argv: settings['worker-hosts'] = argument_value('--worker-hosts')
