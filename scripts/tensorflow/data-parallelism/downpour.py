@@ -25,12 +25,23 @@ def execute_worker(settings):
     batch_size = settings['mini-batch']
     log_path = settings['log-path']
 
+    # Assign the variables to the PS job.
+    # TODO Check if already initialized.
+    with tf.device("/job:ps/task:0"):
+        tf.set_random_seed(1)
+        with tf.name_scope("weights"):
+            W1 = tf.Variable(tf.random_normal([784, 100]))
+            W2 = tf.Variable(tf.random_normal([100, 10]))
+        with tf.name_scope("biases"):
+            b1 = tf.Variable(tf.zeros([100]))
+            b2 = tf.Variable(tf.zeros([10]))
+
     # Build the computation graph.
-    with tf.device(tf.train.replica_device_setter(worker_device="/job:worker/task:%d" % task_index,
-                                                  ps_device="/job:ps",
-                                                  cluster=cluster_specification)):
+    print(task_index)
+    with tf.device("/job:worker/task:" + str(task_index)):
         # count the number of updates
         global_step = tf.get_variable('global_step', [], initializer = tf.constant_initializer(0, dtype=tf.int64),  trainable = False)
+
         # input images
         with tf.name_scope('input'):
             # None -> batch size can be any size, 784 -> flattened mnist image
@@ -38,22 +49,19 @@ def execute_worker(settings):
             # target 10 output classes
             y_ = tf.placeholder(tf.float32, shape=[None, 10], name="y-input")
 
-        # model parameters will change during training so we use tf.Variable
-        tf.set_random_seed(1)
-        with tf.name_scope("weights"):
-            W1 = tf.Variable(tf.random_normal([784, 100]))
-            W2 = tf.Variable(tf.random_normal([100, 10]))
-
-        with tf.name_scope("biases"):
-            b1 = tf.Variable(tf.zeros([100]))
-            b2 = tf.Variable(tf.zeros([10]))
+        # Copy PS variables.
+        with tf.name_scope("pull"):
+            W1_w = tf.identity(W1)
+            W2_w = tf.identity(W2)
+            b1_w = tf.identity(b1)
+            b2_w = tf.identity(b2)
 
         # implement model
         with tf.name_scope("softmax"):
             # y is our prediction
-            z2 = tf.add(tf.matmul(x,W1),b1)
+            z2 = tf.add(tf.matmul(x,W1_w),b1_w)
             a2 = tf.nn.sigmoid(z2)
-            z3 = tf.add(tf.matmul(a2,W2),b2)
+            z3 = tf.add(tf.matmul(a2,W2_w),b2_w)
             y  = tf.nn.softmax(z3)
 
         # specify cost function
@@ -65,7 +73,15 @@ def execute_worker(settings):
         with tf.name_scope('train'):
             # optimizer is an "operation" which we can execute in a session
             grad_op = tf.train.AdamOptimizer(0.0001)
-            train_op = grad_op.minimize(cross_entropy, global_step=global_step)
+            gradients = grad_op.compute_gradients(cross_entropy)
+            train_op = grad_op.apply_gradients(gradients, global_step=global_step)
+
+        # Store local variables in PS.
+        with tf.name_scope('commit'):
+            W1 = W1.assign(W1_w)
+            W2 = W2.assign(W2_w)
+            b1 = b1.assign(b1_w)
+            b2 = b2.assign(b2_w)
 
         with tf.name_scope('Accuracy'):
             # accuracy
@@ -73,18 +89,18 @@ def execute_worker(settings):
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
             # create a summary for our cost and accuracy
-    tf.summary.scalar("cost", cross_entropy)
-    tf.summary.scalar("accuracy", accuracy)
+            tf.summary.scalar("cost", cross_entropy)
+            tf.summary.scalar("accuracy", accuracy)
 
-    summary_op = tf.summary.merge_all()
-    init_op = tf.global_variables_initializer()
-    supervisor = tf.train.Supervisor(is_chief=(task_index == 0), global_step=global_step, init_op=init_op, logdir=log_path)
+        summary_op = tf.summary.merge_all()
+        init_op = tf.global_variables_initializer()
+        supervisor = tf.train.Supervisor(is_chief=(task_index == 0), global_step=global_step, init_op=init_op, logdir=log_path)
 
-    # Read / obtain the MNIST dataset.
-    mnist = input_data.read_data_sets('mnist_data', one_hot=True)
+        # Read / obtain the MNIST dataset.
+        mnist = input_data.read_data_sets('mnist_data', one_hot=True)
 
     frequency = 100
-    tf_config = tf.ConfigProto(intra_op_parallelism_threads=14, inter_op_parallelism_threads=14)
+    tf_config = tf.ConfigProto(intra_op_parallelism_threads=6, inter_op_parallelism_threads=6)
     with supervisor.prepare_or_wait_for_session(server.target, config=tf_config) as sess:
         # create log writer object (this will log on every machine)
         writer = tf.summary.FileWriter(log_path, graph=tf.get_default_graph())
