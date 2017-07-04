@@ -9,16 +9,56 @@ Date:      4 July, 2017"""
 from torch.autograd import *
 from torch.optim import *
 
-import mpi4py as mpi
+from mpi4py import MPI as mpi
 import numpy as np
 import os
 import sys
 import time
 import torch
-import torch
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
+import pickle
+
+
+def get_numpy_parameters(model):
+    """Returns the parameters of the model in a Numpy format."""
+    parameters = []
+    for p in model.parameters():
+        parameters.append(p.data.numpy())
+    parameters = np.asarray(parameters)
+
+    return parameters
+
+
+def run_parameter_server(comm, model):
+    """Runs the parameter server procedure."""
+    central_variable = get_numpy_parameters(model)
+    num_tensors = len(central_variable)
+    comm.send(central_variable, dest=1)
+
+
+def run_worker(comm, model, rank):
+    """Runs the worker procedure."""
+    b = bytearray(248631)
+    parameters = get_numpy_parameters(model)
+    num_tensors = len(parameters)
+    comm.recv(b, source=0)
+    parameters = pickle.loads(b)
+    print(parameters)
+
+
+def main():
+    """Entry point of the training script."""
+    comm = mpi.COMM_WORLD
+    rank = comm.Get_rank()
+    model = build_model()
+    if rank == 0:
+        run_parameter_server(comm, model)
+    else:
+        run_worker(comm, model, rank)
+
+    return None
 
 
 class Model(torch.nn.Module):
@@ -48,11 +88,12 @@ def build_model():
     return Model()
 
 
-def main():
-    """Entry point of the training script."""
+def optimize():
+    """Runs the optimization procedure."""
     # Build the Torch model.
     model = build_model()
     model.zero_grad()
+    parameters = model.parameters()
     # Get the data.
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=False, transform=transform)
