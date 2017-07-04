@@ -34,18 +34,15 @@ def get_numpy_parameters(model):
 def run_parameter_server(comm, model):
     """Runs the parameter server procedure."""
     central_variable = get_numpy_parameters(model)
-    num_tensors = len(central_variable)
     comm.send(central_variable, dest=1)
 
 
 def run_worker(comm, model, rank):
     """Runs the worker procedure."""
-    b = bytearray(248631)
     parameters = get_numpy_parameters(model)
     num_tensors = len(parameters)
-    comm.recv(b, source=0)
-    parameters = pickle.loads(b)
-    print(parameters)
+    data = comm.recv(source=0)
+    print(data)
 
 
 def main():
