@@ -1,6 +1,6 @@
-# TensorFlow Scripts
+# Deep Learning Scripts
 
-A collection of personal TensorFlow scripts, nothing more.
+A collection of personal Deep Learning scripts, nothing more.
 
 ## Research
 
