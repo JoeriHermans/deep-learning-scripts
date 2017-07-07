@@ -21,28 +21,40 @@ import torchvision.transforms as transforms
 import pickle
 
 
-def get_numpy_parameters(model):
+def get_parameters(model):
     """Returns the parameters of the model in a Numpy format."""
     parameters = []
     for p in model.parameters():
-        parameters.append(p.data.numpy())
-    parameters = np.asarray(parameters)
+        parameters.append(p.data)
 
     return parameters
 
 
+def set_parameterization(model, parameters):
+    """Sets the specified parameters to the model."""
+    i = 0
+    for p in model.parameters():
+        p.data.copy_(parameters[i], async=True)
+        i += 1
+
+
 def run_parameter_server(comm, model):
     """Runs the parameter server procedure."""
-    central_variable = get_numpy_parameters(model)
-    comm.send(central_variable, dest=1)
+    central_variable = get_parameters(model)
+    # Send the central variable to all workers.
+    comm.bcast(central_variable, root=0)
+    # Wait for all workers to be initialized.
+    comm.barrier()
 
 
 def run_worker(comm, model, rank):
     """Runs the worker procedure."""
-    parameters = get_numpy_parameters(model)
-    num_tensors = len(parameters)
-    data = comm.recv(source=0)
-    print(data)
+    central_variable = None
+    # Receive the central variable from the parameter server.
+    central_variable = comm.bcast(central_variable, root=0)
+    set_parameterization(model, central_variable)
+    # Wait for all workers to initialize.
+    comm.barrier()
 
 
 def main():
