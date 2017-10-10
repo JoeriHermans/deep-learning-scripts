@@ -6,6 +6,10 @@ A collection of personal Deep Learning scripts, nothing more.
 
 TODO
 
+### Adverserial Variational Optimization
+
+TODO
+
 ### Asynchronous Data Parallelism
 
 TODO
