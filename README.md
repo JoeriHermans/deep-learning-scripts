@@ -1,6 +1,6 @@
 # Deep Learning Scripts
 
-A collection of personal Deep Learning scripts, nothing more.
+A collection of personal Machine Learning scripts, nothing more.
 
 ## Research
 
