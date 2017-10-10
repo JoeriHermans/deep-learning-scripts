@@ -38,13 +38,34 @@ def set_parameterization(model, parameters):
         i += 1
 
 
+def fill_parameters(parameters, value):
+    for p in parameters:
+        p.fill_(value)
+
+
+def apply_delta(tensors, delta):
+    i = 0
+    for t in tensors:
+        torch.add(t, 1, delta[i], out=t)
+        i += 1
+
+
 def run_parameter_server(comm, model):
     """Runs the parameter server procedure."""
+    training = True
     central_variable = get_parameters(model)
     # Send the central variable to all workers.
     comm.bcast(central_variable, root=0)
     # Wait for all workers to be initialized.
     comm.barrier()
+    print("Workers synchronized")
+    sys.stdout.flush()
+    # Add testing code.
+    i = 0
+    while i < 10 - 1:
+        delta = comm.recv(source=mpi.ANY_SOURCE, tag=0)
+        apply_delta(central_variable, delta)
+        i += 1
 
 
 def run_worker(comm, model, rank):
@@ -55,6 +76,9 @@ def run_worker(comm, model, rank):
     set_parameterization(model, central_variable)
     # Wait for all workers to initialize.
     comm.barrier()
+    # Add testing code.
+    fill_parameters(central_variable, 1.0)
+    comm.send(central_variable, dest=0, tag=0)
 
 
 def main():
@@ -67,8 +91,6 @@ def main():
     else:
         run_worker(comm, model, rank)
 
-    return None
-
 
 class Model(torch.nn.Module):
 
@@ -77,9 +99,9 @@ class Model(torch.nn.Module):
         self.conv1 = torch.nn.Conv2d(3, 6, 5)
         self.pool = torch.nn.MaxPool2d(2, 2)
         self.conv2 = torch.nn.Conv2d(6, 16, 5)
-        self.fc1 = torch.nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = torch.nn.Linear(120, 84)
-        self.fc3 = torch.nn.Linear(84, 10)
+        self.fc1 = torch.nn.Linear(16 * 5 * 5, 5000)
+        self.fc2 = torch.nn.Linear(5000, 5000)
+        self.fc3 = torch.nn.Linear(5000, 10)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
