@@ -1,10 +1,8 @@
 # Adverserial Variational Optimization
 
-import gc
 import math
-import matplotlib.mlab as mlab
-import matplotlib.pyplot as plt
 import numpy as np
+import random
 import scipy
 import scipy.stats as stats
 import torch
@@ -68,6 +66,10 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000):
         loss = y_g - y_r + gp
         loss.mean().backward()
         optimizer.step()
+        # Check if debugging information needs to be shown.
+        if iteration % 1000 == 0:
+            # Show the current loss.
+            print("Loss: " + str(loss.mean().data.numpy()[0]))
 
 
 def fit_proposal(proposal, p_r, critic):
@@ -75,14 +77,46 @@ def fit_proposal(proposal, p_r, critic):
     pass
 
 
+def compute_gradient_penalty(critic, real, fake, l=5.0, batch_size=256):
+    # Compute x_hat and its output.
+    epsilon = torch.rand((batch_size, 1))
+    x_hat = epsilon * real + ((1. - epsilon) * fake)
+    x_hat = torch.autograd.Variable(x_hat, requires_grad=True)
+    y_hat = critic(x_hat)
+    # Compute the associated gradients.
+    gradients = torch.autograd.grad(outputs=y_hat, inputs=x_hat,
+                                    grad_outputs=torch.ones(y_hat.size()),
+                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+    # Prevent norm 0 causing NaN.
+    gradients = gradients + 1e-16
+    # Compute the gradient penalty.
+    gradient_penalty = l * ((gradients.norm(2, dim=1) - 1.) ** 2)
+
+    return gradient_penalty
+
+
 def sample_real_data(p_r, batch_size=256):
-    # TODO Implement.
-    pass
+    samples = torch.zeros((batch_size, 1))
+    num_samples_p_r = len(p_r)
+    for index in range(0, batch_size):
+        random_index = random.randint(0, num_samples_p_r - 1)
+        samples[index, :] = p_r[random_index]
+
+    return torch.autograd.Variable(samples, requires_grad=False)
 
 
 def sample_generated_data(proposal, batch_size=256):
-    # TODO Implement.
-    pass
+    # Sample `batch_size` thetas according to our proposal distribution.
+    thetas = draw_gaussian(proposal, batch_size)
+    # Obtain the individual Gaussians.
+    theta_beam_energy = thetas[:, 0]
+    theta_fermi_constant = thetas[:, 1]
+    # Sample according to the proposal distribution.
+    samples = torch.zeros((batch_size, 1))
+    for sample_index, theta in enumerate(thetas):
+        samples[sample_index, :] = simulator(theta, 1)
+
+    return torch.autograd.Variable(samples, requires_grad=False)
 
 
 def add_prior_beam_energy(prior):
@@ -113,8 +147,7 @@ def draw_gaussian(d, num_samples, random_state=None):
     for i in range(0, num_parameters):
         thetas[:, i] = stats.norm.rvs(size=num_samples,
                                       loc=mu[i],
-                                      scale=sigma[i],
-                                      random_state=random_number_generator)
+                                      scale=sigma[i])
 
     return thetas
 
@@ -172,7 +205,7 @@ class Critic(torch.nn.Module):
 
     def __init__(self, num_hidden):
         super(Critic, self).__init__()
-        self.fc_1 = torch.nn.Linear(2, num_hidden)
+        self.fc_1 = torch.nn.Linear(1, num_hidden)
         self.fc_2 = torch.nn.Linear(num_hidden, num_hidden)
         self.fc_3 = torch.nn.Linear(num_hidden, 1)
 
