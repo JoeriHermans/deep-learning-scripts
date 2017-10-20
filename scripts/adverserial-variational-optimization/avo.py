@@ -79,7 +79,10 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000,
 def fit_proposal(proposal, p_r, critic, batch_size=256):
     # Draw several thetas from the current proposal distribution.
     thetas = draw_gaussian(proposal, batch_size)
-    # TODO Implement.
+    # Compute the q-gradient for every theta.
+    for theta in thetas:
+        # TODO Implement.
+        pass
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -128,8 +131,8 @@ def gaussian_logpdf(proposal, theta):
     # Define the `a` as np.log((2. * np.pi) ** 0.5)
     a = 0.91893853320467267
     # Obtain the parameterization of the Gaussian.
-    mu = torch.autograd.Variable(mu, requires_grad=False)
-    sigma = torch.autograd.Variable(sigma, requires_grad=False)
+    mu = torch.autograd.Variable(mu)
+    sigma = torch.autograd.Variable(sigma)
     # Compute the logpdf.
     logpdf = -(sigma.log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
 
@@ -158,13 +161,17 @@ def random_gaussian(mu=[-1, 1], sigma=5.0):
 
 def draw_gaussian(d, num_samples, random_state=None):
     num_parameters = len(d['mu'])
-    thetas = np.zeros((num_samples, num_parameters))
+    thetas = torch.zeros((num_samples, num_parameters))
     mu = d['mu']
     sigma = d['sigma']
     for i in range(0, num_parameters):
-        thetas[:, i] = stats.norm.rvs(size=num_samples,
-                                      loc=mu[i],
-                                      scale=sigma[i])
+        # Draw the Gaussian from the specified parameterization.
+        gaussian = stats.norm.rvs(size=num_samples,
+                                  loc=mu[i],
+                                  scale=sigma[i])
+        # Convert the Gaussian to a Torch tensor.
+        gaussian = torch.from_numpy(gaussian).float()
+        thetas[:, i] = gaussian
 
     return thetas
 
@@ -188,14 +195,14 @@ def simulator_rej_sample_costheta(n_samples, theta, rng):
 
     ntrials = 0
     samples = []
-    x = np.linspace(-1, 1, num=1000)
-    maxval = np.max(simulator_diffxsec(x, sqrtshalf, gf))
+    x = torch.linspace(-1, 1, steps=1000)
+    maxval = torch.max(simulator_diffxsec(x, sqrtshalf, gf))
 
     while len(samples) < n_samples:
         ntrials = ntrials + 1
         xprop = rng.uniform(-1, 1)
         ycut = rng.rand()
-        yprop = simulator_diffxsec(xprop, sqrtshalf, gf) / maxval
+        yprop = (simulator_diffxsec(xprop, sqrtshalf, gf) / maxval)[0]
         if (yprop / maxval) < ycut:
             continue
         samples.append(xprop)
@@ -212,7 +219,8 @@ def simulator_a_fb(sqrtshalf, gf):
     mz = 90
     gf_nom = 0.9
     sqrts = sqrtshalf * 2.
-    a_fb_en = np.tanh((sqrts - mz) / mz * 10)
+    x = torch.FloatTensor([(sqrts - mz) / mz * 10])
+    a_fb_en = torch.tanh(x)
     a_fb_gf = gf / gf_nom
 
     return 2 * a_fb_en * a_fb_gf
