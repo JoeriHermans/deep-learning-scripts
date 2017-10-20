@@ -46,7 +46,7 @@ def fit(proposal, p_r, critic, num_iterations=1000, batch_size=256):
     critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
     for iteration in range(0, num_iterations):
         # Fit the critic network.
-        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size)
+        #fit_critic(proposal, p_r, critic, critic_optimizer, batch_size)
         # Fit the proposal distribution.
         fit_proposal(proposal, p_r, critic, batch_size)
 
@@ -77,12 +77,25 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000,
 
 
 def fit_proposal(proposal, p_r, critic, batch_size=256):
+    gradient_u = torch.FloatTensor([0, 0])
+    gradient_ent = torch.FloatTensor([0, 0])
     # Draw several thetas from the current proposal distribution.
     thetas = draw_gaussian(proposal, batch_size)
     # Compute the q-gradient for every theta.
     for theta in thetas:
-        # TODO Implement.
-        pass
+        # Draw a sample from the simulator.
+        x = torch.autograd.Variable(simulator(theta, 1))
+        likelihood_x = critic(x)
+        theta = torch.autograd.Variable(theta, requires_grad=True)
+        logpdf = gaussian_logpdf(proposal, theta)
+        # Compute the gradient of the logpdf with respect to theta.
+        logpdf.sum().backward()
+        # Obtain the gradient of the logpdf with respect to theta.
+        gradient_logpdf = theta.grad.data
+        # Add the logpdf gradient to the current variational upperbound.
+        gradient_u += -likelihood_x.data * gradient_logpdf
+    # Compute the gradient of the entropy.
+    # TODO
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -131,8 +144,8 @@ def gaussian_logpdf(proposal, theta):
     # Define the `a` as np.log((2. * np.pi) ** 0.5)
     a = 0.91893853320467267
     # Obtain the parameterization of the Gaussian.
-    mu = torch.autograd.Variable(mu)
-    sigma = torch.autograd.Variable(sigma)
+    mu = torch.autograd.Variable(proposal['mu'])
+    sigma = torch.autograd.Variable(proposal['sigma'])
     # Compute the logpdf.
     logpdf = -(sigma.log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
 
