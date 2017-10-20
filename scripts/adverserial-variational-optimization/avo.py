@@ -22,15 +22,65 @@ def main():
     p_r = real_experiment(theta_true, 10000)
     # Initialize the prior of theta, parameterized by a Gaussian.
     proposal = {'mu': [], 'sigma': []}
-    add_prior_beam_energy(p_theta_prior)
-    add_prior_fermi_constant(p_theta_prior)
+    add_prior_beam_energy(proposal)
+    add_prior_fermi_constant(proposal)
     # Inference on theta is done using a critic network in an adverserial setting.
     critic = Critic(num_hidden=100)
     # Fit the proposal distribution to the real distribution using the critic.
     fit(proposal, p_r, critic)
+    # Display the current parameterization of the proposal distribution.
+    print("\nProposal Distribution:")
+    print(" - Beam Energy:")
+    print("    mu: " + str(proposal['mu'][0]))
+    print("    sigma: " + str(proposal['sigma'][0]))
+    print(" - Fermi's Constant:")
+    print("    mu: " + str(proposal['mu'][1]))
+    print("    sigma: " + str(proposal['sigma'][1]))
+    print("\nTrue Distribution:")
+    print(" - Beam Energy: " + str(theta_true[0]))
+    print(" - Fermi's Constant: " + str(theta_true[1]))
 
 
-def fit(proposal, p_r, critic):
+def fit(proposal, p_r, critic, num_iterations=1000):
+    critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.0001)
+    for iteration in range(0, num_iterations):
+        # Fit the critic network.
+        fit_critic(proposal, p_r, critic, critic_optimizer)
+        # Fit the proposal distribution.
+        fit_proposal(proposal, p_r, critic)
+
+
+def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000):
+    # Fit the critic optimally.
+    for iteration in range(0, num_critic_iterations):
+        # Fetch the data batches.
+        x_r = sample_real_data(p_r)
+        x_g = sample_generated_data(proposal)
+        # Reset the gradients.
+        critic.zero_grad()
+        # Forward pass with real data.
+        y_r = critic(x_r)
+        # Forward pass with generated data.
+        y_g = critic(x_g)
+        # Obtain gradient penalty (GP).
+        gp = compute_gradient_penalty(critic, x_r.data, x_g.data)
+        # Compute the loss, and the accompanying gradients.
+        loss = y_g - y_r + gp
+        loss.mean().backward()
+        optimizer.step()
+
+
+def fit_proposal(proposal, p_r, critic):
+    # TODO Implement.
+    pass
+
+
+def sample_real_data(p_r, batch_size=256):
+    # TODO Implement.
+    pass
+
+
+def sample_generated_data(proposal, batch_size=256):
     # TODO Implement.
     pass
 
