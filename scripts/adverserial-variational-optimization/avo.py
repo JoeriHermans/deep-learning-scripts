@@ -22,6 +22,9 @@ def main():
     proposal = {'mu': [], 'sigma': []}
     add_prior_beam_energy(proposal)
     add_prior_fermi_constant(proposal)
+    # Convert the proposal lists to PyTorch Tensors.
+    proposal['mu'] = torch.FloatTensor(proposal['mu'])
+    proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
     # Inference on theta is done using a critic network in an adverserial setting.
     critic = Critic(num_hidden=100)
     # Fit the proposal distribution to the real distribution using the critic.
@@ -39,21 +42,22 @@ def main():
     print(" - Fermi's Constant: " + str(theta_true[1]))
 
 
-def fit(proposal, p_r, critic, num_iterations=1000):
+def fit(proposal, p_r, critic, num_iterations=1000, batch_size=256):
     critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
     for iteration in range(0, num_iterations):
         # Fit the critic network.
-        fit_critic(proposal, p_r, critic, critic_optimizer)
+        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size)
         # Fit the proposal distribution.
-        fit_proposal(proposal, p_r, critic)
+        fit_proposal(proposal, p_r, critic, batch_size)
 
 
-def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000):
+def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000,
+               batch_size=256):
     # Fit the critic optimally.
     for iteration in range(0, num_critic_iterations):
         # Fetch the data batches.
-        x_r = sample_real_data(p_r)
-        x_g = sample_generated_data(proposal)
+        x_r = sample_real_data(p_r, batch_size)
+        x_g = sample_generated_data(proposal, batch_size)
         # Reset the gradients.
         critic.zero_grad()
         # Forward pass with real data.
@@ -72,14 +76,15 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000):
             print("Loss: " + str(loss.mean().data.numpy()[0]))
 
 
-def fit_proposal(proposal, p_r, critic):
+def fit_proposal(proposal, p_r, critic, batch_size=256):
+    # Draw several thetas from the current proposal distribution.
+    thetas = draw_gaussian(proposal, batch_size)
     # TODO Implement.
-    pass
 
 
-def compute_gradient_penalty(critic, real, fake, l=5.0, batch_size=256):
+def compute_gradient_penalty(critic, real, fake, l=5.0):
     # Compute x_hat and its output.
-    epsilon = torch.rand((batch_size, 1))
+    epsilon = torch.rand(real.size())
     x_hat = epsilon * real + ((1. - epsilon) * fake)
     x_hat = torch.autograd.Variable(x_hat, requires_grad=True)
     y_hat = critic(x_hat)
@@ -117,6 +122,18 @@ def sample_generated_data(proposal, batch_size=256):
         samples[sample_index, :] = simulator(theta, 1)
 
     return torch.autograd.Variable(samples, requires_grad=False)
+
+
+def gaussian_logpdf(proposal, theta):
+    # Define the `a` as np.log((2. * np.pi) ** 0.5)
+    a = 0.91893853320467267
+    # Obtain the parameterization of the Gaussian.
+    mu = torch.autograd.Variable(mu, requires_grad=False)
+    sigma = torch.autograd.Variable(sigma, requires_grad=False)
+    # Compute the logpdf.
+    logpdf = -(sigma.log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
+
+    return logpdf
 
 
 def add_prior_beam_energy(prior):
