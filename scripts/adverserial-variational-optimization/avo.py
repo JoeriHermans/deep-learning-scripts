@@ -40,7 +40,7 @@ def main():
 
 
 def fit(proposal, p_r, critic, num_iterations=1000):
-    critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.0001)
+    critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
     for iteration in range(0, num_iterations):
         # Fit the critic network.
         fit_critic(proposal, p_r, critic, critic_optimizer)
