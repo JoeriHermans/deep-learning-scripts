@@ -93,7 +93,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         # Compute the gradient of the Gaussian logpdf.
         theta = torch.autograd.Variable(theta, requires_grad=False)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
-        sigma = torch.autograd.Variable(proposal['sigm'], requires_grad=True)
+        sigma = torch.autograd.Variable(proposal['sigm'a], requires_grad=True)
         logpdf = gaussian_logpdf(mu, sigma, theta)
         logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
