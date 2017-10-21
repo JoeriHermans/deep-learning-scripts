@@ -64,18 +64,18 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, ba
         # Reset the gradients.
         critic.zero_grad()
         # Forward pass with real data.
-        y_r = critic(x_r)
+        y_r = critic(x_r).mean()
         # Forward pass with generated data.
-        y_g = critic(x_g)
+        y_g = critic(x_g).mean()
         # Obtain gradient penalty (GP).
-        gp = compute_gradient_penalty(critic, x_r.data, x_g.data)
+        gp = compute_gradient_penalty(critic, x_r.data, x_g.data).mean()
         # Compute the loss, and the accompanying gradients.
         loss = y_g - y_r + gp
-        loss.mean().backward()
+        loss.backward()
         optimizer.step()
         # Check if debugging information needs to be shown.
         if iteration % 1000 == 0:
-            mean_loss = loss.mean().data.numpy()[0]
+            mean_loss = loss.data.numpy()[0]
             print("Loss: " + str(mean_loss))
             if abs(mean_loss) < 0.1:
                 break
