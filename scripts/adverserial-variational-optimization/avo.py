@@ -49,7 +49,7 @@ def fit(proposal, p_r, critic, num_iterations=1000, batch_size=256):
         fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=10000)
         # Fit the proposal distribution.
         fit_proposal(proposal, p_r, critic, batch_size)
-        print("True Mu: " + str(theta_true))
+        print("True Mu: " + str(true_theta))
         print("Mu: " + str(proposal['mu']))
 
 
