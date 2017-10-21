@@ -3,8 +3,7 @@
 import math
 import numpy as np
 import random
-import scipy
-import scipy.stats as stats
+import sys
 import torch
 import torch.nn.functional as F
 
@@ -26,7 +25,10 @@ def main():
     proposal['mu'] = torch.FloatTensor(proposal['mu'])
     proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
     # Inference on theta is done using a critic network in an adverserial setting.
-    critic = Critic(num_hidden=100)
+    if '--sigmoid' in sys.argv:
+        critic = CriticWithSigmoid(num_hidden=50)
+    else:
+        critic = Critic(num_hidden=50)
     # Fit the proposal distribution to the real distribution using the critic.
     fit(proposal, p_r, critic, theta_true)
     # Display the current parameterization of the proposal distribution.
@@ -268,6 +270,22 @@ class Critic(torch.nn.Module):
         x = F.relu(self.fc_1(x))
         x = F.relu(self.fc_2(x))
         x = (self.fc_3(x))
+
+        return x
+
+
+class CriticWithSigmoid(torch.nn.Module):
+
+    def __init__(self, num_hidden):
+        super(CriticWithSigmoid, self).__init__()
+        self.fc_1 = torch.nn.Linear(1, num_hidden)
+        self.fc_2 = torch.nn.Linear(num_hidden, num_hidden)
+        self.fc_3 = torch.nn.Linear(num_hidden, 1)
+
+    def forward(self, x):
+        x = F.relu(self.fc_1(x))
+        x = F.relu(self.fc_2(x))
+        x = F.sigmoid(self.fc_3(x))
 
         return x
 
