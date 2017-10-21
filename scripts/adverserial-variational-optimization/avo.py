@@ -105,8 +105,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the final adverserial gradient.
     gradient_u = 0.1 * (1. / batch_size) * gradient_u + gamma * gradient_entropy
     # Apply the gradient to the proposal distribution.
-    proposal['mu'] -= gradient_u[0]
-    proposal['sigma'] -= gradient_u[1]
+    proposal['mu'] += gradient_u
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
