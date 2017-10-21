@@ -37,7 +37,7 @@ def main():
         proposal['sigma'] = sigma
     # Convert the proposal lists to PyTorch Tensors.
     proposal['mu'] = torch.FloatTensor(proposal['mu'])
-    proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
+    proposal['sigma'] = torch.FloatTensor(proposal['sigma']).log()
     # Inference on theta is done using a critic network in an adverserial setting.
     if '--sigmoid' in sys.argv:
         critic = CriticWithSigmoid(num_hidden=50)
@@ -71,11 +71,11 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
 
 
 def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, batch_size=256):
+    # Fetch the data batches.
+    x_r = sample_real_data(p_r, batch_size)
+    x_g = sample_generated_data(proposal, batch_size)
     # Fit the critic optimally.
     for iteration in range(0, num_critic_iterations):
-        # Fetch the data batches.
-        x_r = sample_real_data(p_r, batch_size)
-        x_g = sample_generated_data(proposal, batch_size)
         # Reset the gradients.
         critic.zero_grad()
         # Forward pass with real data.
@@ -128,8 +128,8 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     differential_entropy.backward()
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
-    gradient_u_mu = 0.1 * (1. / batch_size) * gradient_u_mu
-    gradient_u_sigma = 0.1 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
+    gradient_u_mu = 0.01 * (1. / batch_size) * gradient_u_mu
+    gradient_u_sigma = 0.01 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
     # Apply de-normalization of mu.
     mu.data -= gradient_u_mu
     denormalized_mu = mu.data * (max_theta - min_theta) + min_theta
