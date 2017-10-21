@@ -98,7 +98,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         # Add the logpdf gradient to the current variational upperbound.
         gradient_u = gradient_u - torch.mul(likelihood_x.data, gradient_logpdf)
     # Compute the gradient of the entropy.
-    sigma = torch.autograd.Variable(proposal['mu'], requires_grad=True)
+    sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.backward()
     gradient_entropy = sigma.grad.data
