@@ -111,13 +111,11 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         theta = torch.autograd.Variable(theta, requires_grad=False)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
-        # Normalize mu.
+        # Normalize mu and theta. We know that the beam energy and fermi's constant within
+        # a certain range. This prevents strange gradients.
         mu.data = (mu.data - min_theta) / (max_theta - min_theta)
         theta.data = (theta.data - min_theta) / (max_theta - min_theta)
         logpdf = gaussian_logpdf(mu, sigma, theta)
-        # We know that the beam energy is constrained between 40 and 50, and G_f between 0 and 2.
-        # Normalize ^_^
-        print(logpdf)
         logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
