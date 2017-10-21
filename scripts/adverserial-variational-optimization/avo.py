@@ -46,9 +46,11 @@ def fit(proposal, p_r, critic, num_iterations=1000, batch_size=256):
     critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
     for iteration in range(0, num_iterations):
         # Fit the critic network.
-        #fit_critic(proposal, p_r, critic, critic_optimizer, batch_size)
+        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=10000)
         # Fit the proposal distribution.
         fit_proposal(proposal, p_r, critic, batch_size)
+        print("True Mu: " + str(theta_true))
+        print("Mu: " + str(proposal['mu']))
 
 
 def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000,
@@ -76,7 +78,7 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000,
             print("Loss: " + str(loss.mean().data.numpy()[0]))
 
 
-def fit_proposal(proposal, p_r, critic, batch_size=256):
+def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     gradient_u = torch.FloatTensor([0, 0])
     gradient_entropy = torch.FloatTensor([0, 0])
     # Draw several thetas from the current proposal distribution.
@@ -85,7 +87,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256):
     for theta in thetas:
         # Draw a sample from the simulator.
         x = torch.autograd.Variable(simulator(theta, 1))
-        likelihood_x = critic(x)
+        likelihood_x = critic(x).view(-1)
         theta = torch.autograd.Variable(theta, requires_grad=True)
         logpdf = gaussian_logpdf(proposal, theta)
         # Compute the gradient of the logpdf with respect to theta.
@@ -93,14 +95,17 @@ def fit_proposal(proposal, p_r, critic, batch_size=256):
         # Obtain the gradient of the logpdf with respect to theta.
         gradient_logpdf = theta.grad.data
         # Add the logpdf gradient to the current variational upperbound.
-        gradient_u += -likelihood_x.data * gradient_logpdf
+        gradient_u = gradient_u - torch.mul(likelihood_x.data, gradient_logpdf)
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['mu'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.backward()
     gradient_entropy = sigma.grad.data
-    print(gradient_entropy)
-    # TODO
+    # Compute the final adverserial gradient.
+    gradient_u = 0.01 * (1. / batch_size) * (gamma * gradient_u + gradient_entropy)
+    # Apply the gradient to the proposal distribution.
+    proposal['mu'] -= gradient_u[0]
+    proposal['sigma'] -= gradient_u[1]
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -146,7 +151,7 @@ def sample_generated_data(proposal, batch_size=256):
 
 
 def gaussian_logpdf(proposal, theta):
-    # Define the `a` as np.log((2. * np.pi) ** 0.5)
+    # Define `a` as np.log((2. * np.pi) ** 0.5)
     a = 0.91893853320467267
     # Obtain the parameterization of the Gaussian.
     mu = torch.autograd.Variable(proposal['mu'])
@@ -158,10 +163,14 @@ def gaussian_logpdf(proposal, theta):
 
 
 def gaussian_differential_entropy(sigma):
-    # Define the `a` as np.log((2. * np.pi) ** 0.5)
-    a = 0.91893853320467267
+    # Define `a` as ((2. * np.pi * np.e) ** 0.5)
+    # Now, since the Gaussian differential entropy is defined as:
+    # sum(log(sigma * a))
+    # We can write it as: sum(log(sigma) + log(a))
+    # So, we can compute log(a) which is: 1.4189385332046727
+    log_a = 1.4189385332046727
 
-    return ((sigma * a).log()).sum()
+    return (sigma.log() + log_a).sum()
 
 
 def add_prior_beam_energy(prior):
@@ -189,14 +198,9 @@ def draw_gaussian(d, num_samples, random_state=None):
     thetas = torch.zeros((num_samples, num_parameters))
     mu = d['mu']
     sigma = d['sigma']
-    for i in range(0, num_parameters):
-        # Draw the Gaussian from the specified parameterization.
-        gaussian = stats.norm.rvs(size=num_samples,
-                                  loc=mu[i],
-                                  scale=sigma[i])
-        # Convert the Gaussian to a Torch tensor.
-        gaussian = torch.from_numpy(gaussian).float()
-        thetas[:, i] = gaussian
+    for i in range(0, num_samples):
+        gaussian = torch.normal(mu, sigma)
+        thetas[i, :] = gaussian
 
     return thetas
 
