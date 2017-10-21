@@ -37,7 +37,7 @@ def main():
         proposal['sigma'] = sigma
     # Convert the proposal lists to PyTorch Tensors.
     proposal['mu'] = torch.FloatTensor(proposal['mu'])
-    proposal['sigma'] = torch.FloatTensor(proposal['sigma']).log()
+    proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
     # Inference on theta is done using a critic network in an adverserial setting.
     if '--sigmoid' in sys.argv:
         critic = CriticWithSigmoid(num_hidden=50)
@@ -129,7 +129,8 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
     gradient_u_mu = 0.01 * (1. / batch_size) * gradient_u_mu
-    gradient_u_sigma = 0.01 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
+    #gradient_u_sigma = 0.01 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
+    gradient_u_sigma = 0.01 * (1. / batch_size) * gradient_u_sigma
     # Apply de-normalization of mu.
     mu.data -= gradient_u_mu
     denormalized_mu = mu.data * (max_theta - min_theta) + min_theta
@@ -184,7 +185,7 @@ def gaussian_logpdf(mu, sigma, theta):
     # Define `a` as np.log((2. * np.pi) ** 0.5)
     a = 0.91893853320467267
     # Compute the logpdf.
-    logpdf = -(sigma.exp().log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
+    logpdf = -(sigma.log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
 
     return logpdf
 
@@ -196,10 +197,9 @@ def gaussian_differential_entropy(sigma):
     # We can write it as: sum(log(sigma) + log(a))
     # So, we can compute log(a) which is: 1.4189385332046727
     # np.sum(np.log(sigma * (2. * np.pi * np.e) ** 0.5))
-    sigma = sigma.exp()
-    a = (sigma * 4.132731354122493).log()
+    dentropy = (sigma * 4.132731354122493).log()
 
-    return a.sum()
+    return dentropy.sum()
 
 
 def add_prior_beam_energy(prior):
