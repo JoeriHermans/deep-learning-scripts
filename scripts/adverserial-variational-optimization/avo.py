@@ -131,9 +131,10 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     gradient_u_mu = 0.01 * (1. / batch_size) * gradient_u_mu
     gradient_u_sigma = 0.01 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
     # Apply de-normalization of mu.
-    denormalized_gradient = gradient_u_mu * (max_theta - min_theta) + min_theta
+    mu -= gradient_u_mu
+    denormalized_mu = mu * (max_theta - min_theta) + min_theta
     # Apply the gradient to the proposal distribution.
-    proposal['mu'] -= denormalized_gradient
+    proposal['mu'] = denormalized_mu
     proposal['sigma'] -= 0.01 * gradient_u_sigma
 
 
