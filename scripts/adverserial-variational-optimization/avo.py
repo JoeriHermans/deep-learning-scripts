@@ -184,7 +184,7 @@ def gaussian_logpdf(mu, sigma, theta):
     # Define `a` as np.log((2. * np.pi) ** 0.5)
     a = 0.91893853320467267
     # Compute the logpdf.
-    logpdf = -(sigma.log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
+    logpdf = -(sigma.exp().log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
 
     return logpdf
 
@@ -195,9 +195,11 @@ def gaussian_differential_entropy(sigma):
     # sum(log(sigma * a))
     # We can write it as: sum(log(sigma) + log(a))
     # So, we can compute log(a) which is: 1.4189385332046727
-    log_a = 1.4189385332046727
+    # np.sum(np.log(sigma * (2. * np.pi * np.e) ** 0.5))
+    sigma = sigma.exp()
+    a = (sigma * 4.132731354122493).log()
 
-    return (sigma.log() + log_a).sum()
+    return a.sum()
 
 
 def add_prior_beam_energy(prior):
