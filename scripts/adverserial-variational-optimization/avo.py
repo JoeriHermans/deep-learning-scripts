@@ -78,7 +78,7 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000,
 
 def fit_proposal(proposal, p_r, critic, batch_size=256):
     gradient_u = torch.FloatTensor([0, 0])
-    gradient_ent = torch.FloatTensor([0, 0])
+    gradient_entropy = torch.FloatTensor([0, 0])
     # Draw several thetas from the current proposal distribution.
     thetas = draw_gaussian(proposal, batch_size)
     # Compute the q-gradient for every theta.
@@ -95,6 +95,11 @@ def fit_proposal(proposal, p_r, critic, batch_size=256):
         # Add the logpdf gradient to the current variational upperbound.
         gradient_u += -likelihood_x.data * gradient_logpdf
     # Compute the gradient of the entropy.
+    sigma = torch.autograd.Variable(proposal['mu'], requires_grad=True)
+    differential_entropy = gaussian_differential_entropy(sigma)
+    differential_entropy.backward()
+    gradient_entropy = sigma.grad.data
+    print(gradient_entropy)
     # TODO
 
 
@@ -150,6 +155,13 @@ def gaussian_logpdf(proposal, theta):
     logpdf = -(sigma.log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
 
     return logpdf
+
+
+def gaussian_differential_entropy(sigma):
+    # Define the `a` as np.log((2. * np.pi) ** 0.5)
+    a = 0.91893853320467267
+
+    return ((sigma * a).log()).sum()
 
 
 def add_prior_beam_energy(prior):
