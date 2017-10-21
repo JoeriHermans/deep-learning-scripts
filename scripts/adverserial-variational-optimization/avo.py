@@ -48,7 +48,7 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
         print("True Mu: " + str(theta_true))
         print("Current Mu: " + str(proposal['mu']))
         # Fit the critic network.
-        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=10000)
+        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=100)
         # Fit the proposal distribution.
         fit_proposal(proposal, p_r, critic, batch_size)
 
@@ -218,8 +218,6 @@ def simulator(theta, n_samples, random_state=None):
 
 
 def simulator_rej_sample_costheta(n_samples, theta, rng):
-    #sqrtshalf = theta[0] * (50 - 40) + 40
-    #gf = theta[1] * (1.5 - 0.5) + 0.5
     sqrtshalf = theta[0]
     gf = theta[1]
 
@@ -267,7 +265,7 @@ class Critic(torch.nn.Module):
     def forward(self, x):
         x = F.relu(self.fc_1(x))
         x = F.relu(self.fc_2(x))
-        x = F.sigmoid(self.fc_3(x))
+        x = (self.fc_3(x))
 
         return x
 
