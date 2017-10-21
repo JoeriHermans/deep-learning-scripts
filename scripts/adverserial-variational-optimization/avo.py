@@ -24,17 +24,17 @@ def main():
         mu = sys.argv[sys.argv.index('--mu') + 1].split(",")
         mu = [float(e) for e in mu]
         proposal['mu'] = mu
+        proposal['--sigma'] = [1., 1.]
     else:
         # Add random beam energy.
         add_prior_beam_energy(proposal)
+        # Add random Fermi constant.
+        add_prior_fermi_constant(proposal)
     # Check if a custom sigma has been specified.
-    if '--sigma' in sys.argv:
+    if '--sigma' in sys.argv and '--mu' in sys.argv:
         sigma = sys.argv[sys.argv.index('--sigma') + 1].split(",")
         sigma = [float(e) for e in sigma]
         proposal['sigma'] = sigma
-    else:
-        # Add random Fermi constant.
-        add_prior_fermi_constant(proposal)
     # Convert the proposal lists to PyTorch Tensors.
     proposal['mu'] = torch.FloatTensor(proposal['mu'])
     proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
