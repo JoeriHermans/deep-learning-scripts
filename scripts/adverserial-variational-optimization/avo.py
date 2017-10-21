@@ -24,7 +24,7 @@ def main():
         mu = sys.argv[sys.argv.index('--mu') + 1].split(",")
         mu = [float(e) for e in mu]
         proposal['mu'] = mu
-        proposal['--sigma'] = [1., 1.]
+        proposal['sigma'] = [1., 1.]
     else:
         # Add random beam energy.
         add_prior_beam_energy(proposal)
@@ -63,6 +63,7 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
     for iteration in range(0, num_iterations):
         print("True Mu: " + str(theta_true))
         print("Current Mu: " + str(proposal['mu']))
+        print("Current Sigma: " + str(proposal['sigma']))
         # Fit the critic network.
         fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=1000)
         # Fit the proposal distribution.
