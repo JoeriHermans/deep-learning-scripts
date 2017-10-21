@@ -135,7 +135,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     denormalized_mu = mu.data * (max_theta - min_theta) + min_theta
     # Apply the gradient to the proposal distribution.
     proposal['mu'] = denormalized_mu
-    proposal['sigma'] -= 0.01 * gradient_u_sigma
+    proposal['sigma'] -= gradient_u_sigma
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
