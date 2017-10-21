@@ -113,7 +113,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
         # Normalize mu.
         mu.data = (mu.data - min_theta) / (max_theta - min_theta)
-        print(mu)
+        theta.data = (theta.data - min_theta) / (max_theta - min_theta)
         logpdf = gaussian_logpdf(mu, sigma, theta)
         # We know that the beam energy is constrained between 40 and 50, and G_f between 0 and 2.
         # Normalize ^_^
