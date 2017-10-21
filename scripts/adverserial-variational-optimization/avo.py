@@ -50,7 +50,7 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
         print("True Mu: " + str(theta_true))
         print("Current Mu: " + str(proposal['mu']))
         # Fit the critic network.
-        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=5000)
+        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=1000)
         # Fit the proposal distribution.
         fit_proposal(proposal, p_r, critic, batch_size)
 
