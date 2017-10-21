@@ -77,8 +77,6 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, ba
         if iteration % 1000 == 0:
             mean_loss = loss.data.numpy()[0]
             print("Loss: " + str(mean_loss))
-            if abs(mean_loss) < 0.1:
-                break
 
 
 def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
