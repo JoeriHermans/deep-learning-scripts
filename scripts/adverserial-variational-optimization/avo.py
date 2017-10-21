@@ -127,7 +127,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.backward()
     gradient_entropy_sigma = sigma.grad.data
-    print(gradient_entropy_sigma)
+    print(gradient_u_sigma)
     # Compute the final adverserial gradient.
     gradient_u_mu = 0.01 * (1. / batch_size) * gradient_u_mu
     gradient_u_sigma = 0.01 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
