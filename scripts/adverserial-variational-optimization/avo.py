@@ -89,7 +89,6 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         # Draw a sample from the simulator.
         x = torch.autograd.Variable(simulator(theta, 1))
         likelihood_x = critic(x).view(-1)
-        print(likelihood_x)
         theta = torch.autograd.Variable(theta, requires_grad=True)
         logpdf = gaussian_logpdf(proposal, theta)
         # Compute the gradient of the logpdf with respect to theta.
@@ -104,9 +103,9 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     differential_entropy.backward()
     gradient_entropy = sigma.grad.data
     # Compute the final adverserial gradient.
-    gradient_u = 0.01 * (1. / batch_size) * gradient_u + gamma * gradient_entropy
+    gradient_u = 0.001 * (1. / batch_size) * gradient_u + gamma * gradient_entropy
     # Apply the gradient to the proposal distribution.
-    proposal['mu'] -= gradient_u
+    proposal['mu'] += gradient_u
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
