@@ -84,7 +84,7 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, ba
 def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     gradient_u_mu = torch.FloatTensor([0, 0])
     gradient_u_sigma = torch.FloatTensor([0, 0])
-    gradient_entropy = torch.FloatTensor([0, 0])
+    gradient_entropy_sigma = torch.FloatTensor([0, 0])
     # Draw several thetas from the current proposal distribution.
     thetas = draw_gaussian(proposal, batch_size)
     # Compute the q-gradient for every theta.
@@ -107,10 +107,10 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.backward()
-    gradient_entropy = sigma.grad.data
+    gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
-    gradient_u_mu = (1. / batch_size) * gradient_u_mu + gamma * gradient_entropy
-    gradient_u_sigma = (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy
+    gradient_u_mu = (1. / batch_size) * gradient_u_mu
+    gradient_u_sigma = (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= 0.01 * gradient_u_mu
     proposal['sigma'] -= 0.01 * gradient_u_sigma
