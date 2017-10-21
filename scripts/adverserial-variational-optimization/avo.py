@@ -28,7 +28,7 @@ def main():
     # Inference on theta is done using a critic network in an adverserial setting.
     critic = Critic(num_hidden=100)
     # Fit the proposal distribution to the real distribution using the critic.
-    fit(proposal, p_r, critic)
+    fit(proposal, p_r, critic, theta_true)
     # Display the current parameterization of the proposal distribution.
     print("\nProposal Distribution:")
     print(" - Beam Energy:")
@@ -42,14 +42,14 @@ def main():
     print(" - Fermi's Constant: " + str(theta_true[1]))
 
 
-def fit(proposal, p_r, critic, num_iterations=1000, batch_size=256):
+def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
     critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
     for iteration in range(0, num_iterations):
         # Fit the critic network.
         fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=10000)
         # Fit the proposal distribution.
         fit_proposal(proposal, p_r, critic, batch_size)
-        print("True Mu: " + str(true_theta))
+        print("True Mu: " + str(theta_true))
         print("Mu: " + str(proposal['mu']))
 
 
