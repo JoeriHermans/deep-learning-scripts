@@ -59,7 +59,7 @@ def main():
 
 
 def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
-    critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
+    critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.001)
     for iteration in range(0, num_iterations):
         print("True Mu: " + str(theta_true))
         print("Current Mu: " + str(proposal['mu']))
