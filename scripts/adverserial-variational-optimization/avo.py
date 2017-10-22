@@ -43,8 +43,13 @@ def main():
         critic = CriticWithSigmoid(num_hidden=50)
     else:
         critic = Critic(num_hidden=50)
+    # Obtain the batch size from the arguments.
+    if '--batch-size' in sys.argv:
+        batch_size = int(sys.argv[sys.argv.index('--batch-size') + 1])
+    else:
+        batch_size = 256
     # Fit the proposal distribution to the real distribution using the critic.
-    fit(proposal, p_r, critic, theta_true)
+    fit(proposal, p_r, critic, theta_true, batch_size)
     # Display the current parameterization of the proposal distribution.
     print("\nProposal Distribution:")
     print(" - Beam Energy:")
