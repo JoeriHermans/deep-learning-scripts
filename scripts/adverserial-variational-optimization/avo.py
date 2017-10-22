@@ -108,7 +108,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     mu = (mu - min_theta) / (max_theta - min_theta)
     # Convert mu and sigma to torch variables.
     mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
-    sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=False)
+    sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
