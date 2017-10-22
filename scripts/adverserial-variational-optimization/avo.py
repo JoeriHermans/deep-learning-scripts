@@ -102,20 +102,16 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     gradient_entropy_sigma = torch.FloatTensor([0, 0])
     # Draw several thetas from the current proposal distribution.
     thetas = draw_gaussian(proposal, batch_size)
-    # Compute the normalized variables.
-    mu = torch.FloatTensor(proposal['mu'])
-    sigma = torch.FloatTensor(proposal['sigma'])
-    mu = (mu - min_theta) / (max_theta - min_theta)
-    # Convert mu and sigma to torch variables.
-    mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
-    sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
         x = torch.autograd.Variable(simulator(theta, 1))
         likelihood_x = critic(x).view(-1)
-        # Normalize theta.
+        mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
+        sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
+        # Normalize theta and mu.
         theta = (theta - min_theta) / (max_theta - min_theta)
+        mu.data = (mu.data - min_theta) / (max_theta - min_theta)
         # Compute the gradient of the Gaussian logpdf.
         theta = torch.autograd.Variable(theta)
         logpdf = gaussian_logpdf(mu, sigma, theta)
