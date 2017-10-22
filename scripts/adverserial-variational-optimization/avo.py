@@ -117,16 +117,14 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
         # Normalize theta.
         theta = (theta - min_theta) / (max_theta - min_theta)
         # Compute the gradient of the Gaussian logpdf.
-        theta = torch.autograd.Variable(theta, requires_grad=False)
+        theta = torch.autograd.Variable(theta)
         logpdf = gaussian_logpdf(mu, sigma, theta)
         logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
-        print(gradient_logpdf_mu)
-        print(gradient_logpdf_sigma)
         # Add the logpdf gradient to the current variational upperbound.
-        gradient_u_mu = gradient_u_mu - likelihood_x.data * gradient_logpdf_mu
-        gradient_u_sigma = gradient_u_sigma - likelihood_x.data * gradient_logpdf_sigma
+        gradient_u_mu += -likelihood_x.data * gradient_logpdf_mu
+        gradient_u_sigma += -likelihood_x.data * gradient_logpdf_sigma
         # Clean the gradients of the variable.
         mu.grad.data.zero_()
         sigma.grad.data.zero_()
@@ -193,7 +191,7 @@ def gaussian_logpdf(mu, sigma, theta):
     # Define `a` as np.log((2. * np.pi) ** 0.5)
     a = 0.91893853320467267
     # Compute the logpdf.
-    logpdf = -(sigma.log() + a) + (theta - mu) ** 2 / (2. * sigma ** 2)
+    logpdf = -(sigma.log() + a + (theta - mu) ** 2 / (2. * sigma ** 2))
 
     return logpdf
 
