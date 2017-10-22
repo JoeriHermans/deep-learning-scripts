@@ -102,23 +102,31 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     gradient_entropy_sigma = torch.FloatTensor([0, 0])
     # Draw several thetas from the current proposal distribution.
     thetas = draw_gaussian(proposal, batch_size)
+    # Compute the normalized variables.
+    mu = torch.FloatTensor(proposal['mu'])
+    sigma = torch.FloatTensor(proposal['sigma'])
+    mu = (mu - min_theta) / (max_theta - min_theta)
+    # Convert mu and sigma to torch variables.
+    mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
+    sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=False)
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
         x = torch.autograd.Variable(simulator(theta, 1))
         likelihood_x = critic(x).view(-1)
+        # Clean the gradients of the variable.
+        mu.grad.data.zero_()
+        sigma.grad.data.zero_()
+        # Normalize theta.
+        theta = (theta - min_theta) / (max_theta - min_theta)
         # Compute the gradient of the Gaussian logpdf.
         theta = torch.autograd.Variable(theta, requires_grad=False)
-        mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
-        sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
-        # Normalize mu and theta. We know that the beam energy and fermi's constant within
-        # a certain range. This prevents strange gradients.
-        mu.data = (mu.data - min_theta) / (max_theta - min_theta)
-        theta.data = (theta.data - min_theta) / (max_theta - min_theta)
         logpdf = gaussian_logpdf(mu, sigma, theta)
         logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
+        print(gradient_logpdf_mu)
+        print(gradient_logpdf_sigma)
         # Add the logpdf gradient to the current variational upperbound.
         gradient_u_mu = gradient_u_mu - likelihood_x.data * gradient_logpdf_mu
         gradient_u_sigma = gradient_u_sigma - likelihood_x.data * gradient_logpdf_sigma
