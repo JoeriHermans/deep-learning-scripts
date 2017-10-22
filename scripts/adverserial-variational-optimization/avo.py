@@ -114,9 +114,6 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
         # Draw a sample from the simulator.
         x = torch.autograd.Variable(simulator(theta, 1))
         likelihood_x = critic(x).view(-1)
-        # Clean the gradients of the variable.
-        mu.grad.data.zero_()
-        sigma.grad.data.zero_()
         # Normalize theta.
         theta = (theta - min_theta) / (max_theta - min_theta)
         # Compute the gradient of the Gaussian logpdf.
@@ -130,6 +127,9 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
         # Add the logpdf gradient to the current variational upperbound.
         gradient_u_mu = gradient_u_mu - likelihood_x.data * gradient_logpdf_mu
         gradient_u_sigma = gradient_u_sigma - likelihood_x.data * gradient_logpdf_sigma
+        # Clean the gradients of the variable.
+        mu.grad.data.zero_()
+        sigma.grad.data.zero_()
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
