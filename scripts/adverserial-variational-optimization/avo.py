@@ -200,6 +200,7 @@ def gaussian_logpdf(mu, sigma, theta):
 
 
 def gaussian_differential_entropy(sigma):
+    sigma = sigma.exp()
     dentropy = -0.5 * (2. * np.pi * np.e * sigma ** 2).log()
 
     return dentropy.sum()
