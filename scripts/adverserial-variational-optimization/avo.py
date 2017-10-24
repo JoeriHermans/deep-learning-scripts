@@ -135,7 +135,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     differential_entropy = gaussian_differential_entropy(sigma)
     # Compute the gradients of sigma w.r.t. the differential entropy.
     gradients = torch.autograd.grad(outputs=differential_entropy, inputs=sigma,
-                                    grad_outputs=torch.ones(y_hat.size()),
+                                    grad_outputs=torch.ones(differential_entropy.size()),
                                     create_graph=True, retain_graph=True, only_inputs=True)[0]
     # Set the differential entropy gradient.
     gradient_entropy_sigma = gradients
