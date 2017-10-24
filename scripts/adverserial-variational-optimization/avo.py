@@ -77,13 +77,13 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
 
 
 def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, batch_size=256):
-    # Fetch the data batches.
-    x_r = sample_real_data(p_r, batch_size)
-    x_g = sample_generated_data(proposal, batch_size)
     # Fit the critic optimally.
     for iteration in range(0, num_critic_iterations):
         # Reset the gradients.
         critic.zero_grad()
+        # Fetch the data batches.
+        x_r = sample_real_data(p_r, batch_size)
+        x_g = sample_generated_data(proposal, batch_size)
         # Forward pass with real data.
         y_r = critic(x_r).mean()
         # Forward pass with generated data.
