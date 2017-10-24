@@ -1,3 +1,4 @@
+
 # Adverserial Variational Optimization
 
 import math
@@ -198,13 +199,7 @@ def gaussian_logpdf(mu, sigma, theta):
 
 
 def gaussian_differential_entropy(sigma):
-    # Define `a` as ((2. * np.pi * np.e) ** 0.5)
-    # Now, since the Gaussian differential entropy is defined as:
-    # sum(log(sigma * a))
-    # We can write it as: sum(log(sigma) + log(a))
-    # So, we can compute log(a) which is: 1.4189385332046727
-    # np.sum(np.log(sigma * (2. * np.pi * np.e) ** 0.5))
-    dentropy = (sigma * 4.132731354122493).log()
+    dentropy = -0.5 * (2. * np.pi * np.e * sigma ** 2).log()
 
     return dentropy.sum()
 
