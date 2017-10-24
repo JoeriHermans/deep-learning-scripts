@@ -181,10 +181,7 @@ def sample_generated_data(proposal, batch_size=256):
 
 
 def gaussian_logpdf(mu, sigma, theta):
-    # Define `a` as np.log((2. * np.pi) ** 0.5)
-    a = 0.91893853320467267
-    # Compute the logpdf.
-    logpdf = -(sigma.log() + a + (theta - mu) ** 2 / (2. * sigma ** 2))
+    logpdf = -(sigma.log() + ((2. * np.pi) ** 0.5).log() + (theta - mu) ** 2 / (2. * sigma ** 2))
 
     return logpdf
 
@@ -192,7 +189,7 @@ def gaussian_logpdf(mu, sigma, theta):
 def gaussian_differential_entropy(sigma):
     dentropy = -0.5 * (2. * np.pi * np.e * sigma ** 2).log()
 
-    return dentropy.sum()
+    return dentropy
 
 
 def add_prior_beam_energy(prior):
