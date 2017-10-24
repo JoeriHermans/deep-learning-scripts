@@ -188,7 +188,8 @@ def gaussian_logpdf(mu, sigma, theta):
 
 
 def gaussian_differential_entropy(sigma):
-    dentropy = -0.5 * (2. * np.pi * np.e * sigma ** 2).log()
+    dentropy = (sigma * (2. * np.pi * np.e) ** .5).log()
+    #dentropy = -0.5 * (2. * np.pi * np.e * sigma ** 2).log()
 
     return dentropy
 
