@@ -131,8 +131,12 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     differential_entropy.sum().backward()
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
-    gradient_u_mu = 0.8 * ((1. / batch_size) * gradient_u_mu)
-    gradient_u_sigma = 0.8 * 0.02 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
+    gradient_u_mu = ((1. / batch_size) * gradient_u_mu)
+    # Apply learning rate due to different ranges.
+    gradient_u_mu[1] *= 0.2
+    # Apply general learning rate.
+    gradient_u_mu *= 0.1
+    gradient_u_sigma = 0.01 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
