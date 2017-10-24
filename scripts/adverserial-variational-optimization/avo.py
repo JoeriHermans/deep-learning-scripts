@@ -100,7 +100,7 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, ba
             print("Loss: " + str(mean_loss))
 
 
-def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
+def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     max_theta = torch.FloatTensor([60, 3])
     min_theta = torch.FloatTensor([30, -1])
     gradient_u_mu = torch.FloatTensor([0, 0])
@@ -136,6 +136,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     differential_entropy.backward()
     gradient_entropy_sigma = -sigma.grad.data
     print("GRADIENT ENTROPY:")
+    gradient_entropy_sigma = 1.
     print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
     gradient_u_mu = 0.08 * (1. / batch_size) * gradient_u_mu
@@ -200,7 +201,6 @@ def gaussian_logpdf(mu, sigma, theta):
 
 
 def gaussian_differential_entropy(sigma):
-    sigma = sigma.exp()
     dentropy = -0.5 * (2. * np.pi * np.e * sigma ** 2).log()
 
     return dentropy.sum()
