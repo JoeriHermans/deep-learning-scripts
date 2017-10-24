@@ -101,8 +101,6 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, ba
 
 
 def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
-    max_theta = torch.FloatTensor([60, 3])
-    min_theta = torch.FloatTensor([30, -1])
     gradient_u_mu = torch.FloatTensor([0, 0])
     gradient_u_sigma = torch.FloatTensor([0, 0])
     gradient_entropy_sigma = torch.FloatTensor([0, 0])
@@ -115,9 +113,6 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         likelihood_x = critic(x).view(-1)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
-        # Normalize theta and mu.
-        theta = (theta - min_theta) / (max_theta - min_theta)
-        mu.data = (mu.data - min_theta) / (max_theta - min_theta)
         # Compute the gradient of the Gaussian logpdf.
         theta = torch.autograd.Variable(theta)
         logpdf = gaussian_logpdf(mu, sigma, theta)
@@ -135,13 +130,10 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.backward()
     gradient_entropy_sigma = sigma.grad.data
-    print("GRADIENT ENTROPY:")
-    gradient_entropy_sigma[0] = 1.
-    gradient_entropy_sigma[1] = 1.
-    print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
-    gradient_u_mu = 0.08 * (1. / batch_size) * gradient_u_mu
+    gradient_u_mu = 0.01 * (1. / batch_size) * gradient_u_mu
     gradient_u_sigma = 0.08 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
+    print(gradient_u_sigma)
     # Apply de-normalization of mu.
     mu.data -= gradient_u_mu
     denormalized_mu = mu.data * (max_theta - min_theta) + min_theta
