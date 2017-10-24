@@ -133,12 +133,8 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
-    # Compute the gradients of sigma w.r.t. the differential entropy.
-    gradients = torch.autograd.grad(outputs=differential_entropy, inputs=sigma,
-                                    grad_outputs=torch.ones(differential_entropy.size()),
-                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
-    # Set the differential entropy gradient.
-    gradient_entropy_sigma = gradients
+    differential_entropy.backward()
+    gradient_entropy_sigma = sigma.grad.data
     print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
     gradient_u_mu = 0.01 * (1. / batch_size) * gradient_u_mu
@@ -203,9 +199,9 @@ def gaussian_logpdf(mu, sigma, theta):
 
 
 def gaussian_differential_entropy(sigma):
-    dentropy = -(0.5 * (2. * np.pi * np.e * sigma ** 2).log())
+    dentropy = -0.5 * (2. * np.pi * np.e * sigma ** 2).log()
 
-    return dentropy
+    return dentropy.sum()
 
 
 def add_prior_beam_energy(prior):
