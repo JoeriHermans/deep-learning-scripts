@@ -128,7 +128,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
-    differential_entropy.backward()
+    differential_entropy.sum().backward()
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
     gradient_u_mu = 0.1 * ((1. / batch_size) * gradient_u_mu)
