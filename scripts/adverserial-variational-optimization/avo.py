@@ -134,7 +134,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.backward()
-    gradient_entropy_sigma = sigma.grad.data
+    gradient_entropy_sigma = -sigma.grad.data
     print("GRADIENT ENTROPY:")
     print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
