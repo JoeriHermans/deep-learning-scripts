@@ -181,7 +181,8 @@ def sample_generated_data(proposal, batch_size=256):
 
 
 def gaussian_logpdf(mu, sigma, theta):
-    logpdf = -(sigma.log() + ((2. * np.pi) ** 0.5).log() + (theta - mu) ** 2 / (2. * sigma ** 2))
+    a = 0.91893853320467267
+    logpdf = -(sigma.log() + a + (theta - mu) ** 2 / (2. * sigma ** 2))
 
     return logpdf
 
