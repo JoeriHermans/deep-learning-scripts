@@ -138,8 +138,8 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=4.0):
     print("GRADIENT ENTROPY:")
     print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
-    gradient_u_mu = 0.01 * (1. / batch_size) * gradient_u_mu
-    gradient_u_sigma = 0.01 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
+    gradient_u_mu = 0.08 * (1. / batch_size) * gradient_u_mu
+    gradient_u_sigma = 0.08 * (1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma
     # Apply de-normalization of mu.
     mu.data -= gradient_u_mu
     denormalized_mu = mu.data * (max_theta - min_theta) + min_theta
