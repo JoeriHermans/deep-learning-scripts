@@ -137,6 +137,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
+    proposal['sigma'] = torch.abs(proposal['sigma'])
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
