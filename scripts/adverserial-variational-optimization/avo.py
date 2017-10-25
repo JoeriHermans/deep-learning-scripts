@@ -77,13 +77,13 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=1000, batch_size=256):
 
 
 def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, batch_size=256):
+     # Fetch the data batches.
+    x_r = sample_real_data(p_r, batch_size)
+    x_g = sample_generated_data(proposal, batch_size)
     # Fit the critic optimally.
     for iteration in range(0, num_critic_iterations):
         # Reset the gradients.
         critic.zero_grad()
-        # Fetch the data batches.
-        x_r = sample_real_data(p_r, batch_size)
-        x_g = sample_generated_data(proposal, batch_size)
         # Forward pass with real data.
         y_r = critic(x_r).mean()
         # Forward pass with generated data.
@@ -109,12 +109,12 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
-        x = torch.autograd.Variable(simulator(theta, 1))
+        x = torch.autograd.Variable(simulator(theta, 1), requires_grad=True)
         likelihood_x = critic(x).view(-1)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
         # Compute the gradient of the Gaussian logpdf.
-        theta = torch.autograd.Variable(theta)
+        theta = torch.autograd.Variable(theta, requires_grad=False)
         logpdf = gaussian_logpdf(mu, sigma, theta)
         logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
@@ -122,14 +122,13 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         # Add the logpdf gradient to the current variational upperbound.
         gradient_u_mu += -likelihood_x.data * gradient_logpdf_mu
         gradient_u_sigma += -likelihood_x.data * gradient_logpdf_sigma
-        # Clean the gradients of the variable.
-        mu.grad.data.zero_()
-        sigma.grad.data.zero_()
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.sum().backward()
     gradient_entropy_sigma = sigma.grad.data
+    print("Gradient Entropy:")
+    print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
     gradient_u_mu = ((1. / batch_size) * gradient_u_mu)
     # Apply learning rate due to different ranges.
