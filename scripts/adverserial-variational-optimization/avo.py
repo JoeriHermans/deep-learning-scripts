@@ -15,7 +15,7 @@ from torch.autograd import Variable
 def main():
     # Assume there exists some true parameterization.
     # Beam Energy = 45 Gev, and Fermi's Constant is 0.9
-    theta_true = [45.0, 0.9]
+    theta_true = [41.0, 0.9]
     # Assume there is an experiment drawing (real) samples from nature.
     p_r = real_experiment(theta_true, 10000)
     # Initialize the prior of theta, parameterized by a Gaussian.
@@ -94,10 +94,6 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, ba
         loss = y_g - y_r + gp
         loss.backward()
         optimizer.step()
-        # Check if debugging information needs to be shown.
-        if iteration % 1000 == 0:
-            mean_loss = loss.data.numpy()[0]
-            print("Loss: " + str(mean_loss))
 
 
 def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
@@ -109,8 +105,8 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
-        x = torch.autograd.Variable(simulator(theta, 1), requires_grad=True)
-        likelihood_x = critic(x).view(-1)
+        x = torch.autograd.Variable(simulator(theta, batch_size), requires_grad=False)
+        likelihood_x = critic(x).mean().view(-1)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
         # Compute the gradient of the Gaussian logpdf.
@@ -128,16 +124,28 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     differential_entropy.sum().backward()
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
-    gradient_u_mu = ((1. / batch_size) * gradient_u_mu)
-    # Apply learning rate due to different ranges.
-    gradient_u_mu[1] *= 0.02
-    # Apply general learning rate.
-    gradient_u_mu *= 0.1
-    gradient_u_sigma = 0.01 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
+    gradient_u_mu[1] *= .2
+    gradient_u_mu = .1 * ((1. / batch_size) * gradient_u_mu)
+    gradient_u_sigma = .1 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
     proposal['sigma'] = torch.abs(proposal['sigma'])
+    sigma_beam_energy = proposal['sigma'][0]
+    sigma_fermi_constant = proposal['sigma'][1]
+    # Constrain the uncertainty of the beam energy.
+    if sigma_beam_energy >= 1.:
+        sigma_beam_energy = 1. + np.log(proposal['sigma'][0])
+    elif sigma_beam_energy < .1:
+        sigma_beam_energy = .1
+    # Constrain the uncertainty of Fermi's constant.
+    if sigma_fermi_constant >= 1.:
+        sigma_fermi_constant = 1. + np.log(proposal['sigma'][1])
+    elif sigma_fermi_constant < .1:
+        sigma_fermi_constant = .1
+    # Set the new uncertainties.
+    proposal['sigma'][0] = sigma_beam_energy
+    proposal['sigma'][1] = sigma_fermi_constant
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -165,7 +173,7 @@ def sample_real_data(p_r, batch_size=256):
         random_index = random.randint(0, num_samples_p_r - 1)
         samples[index, :] = p_r[random_index]
 
-    return torch.autograd.Variable(samples, requires_grad=False)
+    return torch.autograd.Variable(samples)
 
 
 def sample_generated_data(proposal, batch_size=256):
@@ -179,12 +187,12 @@ def sample_generated_data(proposal, batch_size=256):
     for sample_index, theta in enumerate(thetas):
         samples[sample_index, :] = simulator(theta, 1)
 
-    return torch.autograd.Variable(samples, requires_grad=False)
+    return torch.autograd.Variable(samples)
 
 
 def gaussian_logpdf(mu, sigma, theta):
     a = 0.91893853320467267
-    logpdf = -(sigma.log() + a + (theta - mu) ** 2 / (2. * sigma ** 2))
+    logpdf = -(sigma.log() + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma ** 2))
 
     return logpdf
 
