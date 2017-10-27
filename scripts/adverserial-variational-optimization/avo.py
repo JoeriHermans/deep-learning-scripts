@@ -15,7 +15,7 @@ from torch.autograd import Variable
 def main():
     # Assume there exists some true parameterization.
     # Beam Energy = 45 Gev, and Fermi's Constant is 0.9
-    theta_true = [41.0, 0.9]
+    theta_true = [45.0, 0.9]
     # Assume there is an experiment drawing (real) samples from nature.
     p_r = real_experiment(theta_true, 10000)
     # Initialize the prior of theta, parameterized by a Gaussian.
@@ -91,9 +91,11 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=50000, ba
         # Obtain gradient penalty (GP).
         gp = compute_gradient_penalty(critic, x_r.data, x_g.data).mean()
         # Compute the loss, and the accompanying gradients.
-        loss = y_g - y_r + gp
+        loss = -y_g + y_r + gp
         loss.backward()
         optimizer.step()
+    # Display the loss of the critic at the last step.
+    print("Loss: " + str(loss.data.numpy()[0]))
 
 
 def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
@@ -125,8 +127,9 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
     gradient_u_mu[1] *= .2
+    gradient_u_sigma[1] *= .2
     gradient_u_mu = .1 * ((1. / batch_size) * gradient_u_mu)
-    gradient_u_sigma = .1 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
+    gradient_u_sigma = .1 * ((1. / batch_size) * gradient_u_sigma)
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
@@ -294,7 +297,7 @@ class Critic(torch.nn.Module):
     def forward(self, x):
         x = F.relu(self.fc_1(x))
         x = F.relu(self.fc_2(x))
-        x = (self.fc_3(x))
+        x = F.relu(self.fc_3(x))
 
         return x
 
