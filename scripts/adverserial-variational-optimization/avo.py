@@ -71,8 +71,8 @@ def main():
 
 
 def normalize(mu):
-    min_mu = torch.FloatTensor([30, 0])
-    max_mu = torch.FloatTensor([60, 2])
+    min_mu = torch.FloatTensor([40, 0])
+    max_mu = torch.FloatTensor([50, 2])
     if '--normalize' in sys.argv:
         mu = (mu - min_mu) / (max_mu - min_mu)
 
@@ -80,8 +80,8 @@ def normalize(mu):
 
 
 def denormalize(mu):
-    min_mu = torch.FloatTensor([30, 0])
-    max_mu = torch.FloatTensor([60, 2])
+    min_mu = torch.FloatTensor([40, 0])
+    max_mu = torch.FloatTensor([50, 2])
     if '--normalize' in sys.argv:
         mu = mu * (max_mu - min_mu) + min_mu
 
@@ -151,6 +151,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
     gradient_u_mu = .01 * ((1. / batch_size) * gradient_u_mu)
+    print(gradient_entropy_sigma)
     gradient_u_sigma = .01 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
