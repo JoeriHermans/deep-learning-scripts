@@ -95,7 +95,7 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=100, batch_size=256):
         print("Current Mu: " + str(denormalize(proposal['mu'])))
         print("Current Sigma: " + str(proposal['sigma'].exp()))
         # Fit the critic network.
-        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=1000)
+        fit_critic(proposal, p_r, critic, critic_optimizer, batch_size=batch_size, num_critic_iterations=100)
         # Fit the proposal distribution.
         fit_proposal(proposal, p_r, critic, batch_size)
 
@@ -132,7 +132,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
-        x = torch.autograd.Variable(simulator(theta, batch_size), requires_grad=False)
+        x = torch.autograd.Variable(simulator(theta, 1), requires_grad=False)
         likelihood_x = critic(x).mean().view(-1)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
@@ -150,9 +150,9 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     differential_entropy = gaussian_differential_entropy(sigma)
     differential_entropy.sum().backward()
     gradient_entropy_sigma = sigma.grad.data
+    print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
     gradient_u_mu = .01 * ((1. / batch_size) * gradient_u_mu)
-    print(gradient_entropy_sigma)
     gradient_u_sigma = .01 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
@@ -203,14 +203,16 @@ def sample_generated_data(proposal, batch_size=256):
 
 def gaussian_logpdf(mu, sigma, theta):
     sigma = sigma.exp()
-    logpdf = -(sigma.log() + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma ** 2))
+    logpdf = (sigma.log() + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma ** 2))
 
     return logpdf
 
 
 def gaussian_differential_entropy(sigma):
     sigma = sigma.exp()
-    dentropy = (sigma * (2. * np.pi * np.e) ** .5).log()
+    dentropy = (sigma.log() * (2. * np.pi * np.e) ** .5).log()
+    # TODO Fixme.
+    #dentropy = -.5 * ((sigma.log() ** 2 * 2. * np.pi * np.e).log())
 
     return dentropy
 
