@@ -23,8 +23,17 @@ def main():
     settings = parse_arguments()
     # Check if the provided settings are valid.
     if settings['valid']:
+        # Initialize the distributed backend.
+        distributed_backend = settings['backend']
+        master_orchestrator = settings['master']
+        master_orchestrator_port = settings['master_port']
+        # Obtain additional settings required for the distributed initialization.
+        rank = settings['rank']
+        world_size = settings['world_size']
+        # Initialize the distributed process group.
+        method = distributed_backend + '://' + master_orchestrator + ':' + str(master_orchestrator_port)
+        dist.init_process_group(init_method=method, rank=rank, world_size=world_size, backend=distributed_backend)
         # TODO Implement.
-        pass
     else :
         # Display the usage information.
         usage()
