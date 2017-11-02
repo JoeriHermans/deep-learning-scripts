@@ -33,10 +33,29 @@ def main():
         # Initialize the distributed process group.
         method = distributed_backend + '://' + master_orchestrator + ':' + str(master_orchestrator_port)
         dist.init_process_group(init_method=method, rank=rank, world_size=world_size, backend=distributed_backend)
-        # TODO Implement.
-    else :
+        # Call the optimization procedure under the specified settings.
+        optimize(settings)
+    else:
         # Display the usage information.
         usage()
+
+
+def build_model(settings):
+    """Constructs the model under the specified settings."""
+    raise NotImplementedError
+
+
+def is_master(rank):
+    """Check if the process rank is the master rank (0)."""
+    return rank == 0
+
+
+def optimize(settings):
+    """Distributed Optimization Procedure under the specified settings."""
+    rank = settings['rank']
+    model = build_model(settings)
+    # Master process is responsible for the network initialization.
+    raise NotImplementedError
 
 
 def set_parameterization(model, parameters):
