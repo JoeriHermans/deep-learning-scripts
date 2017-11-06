@@ -42,7 +42,8 @@ def main():
 
 def build_model(settings):
     """Constructs the model under the specified settings."""
-    raise NotImplementedError
+    # FIXME.
+    return torch.zeros((100, 100))
 
 
 def is_master(rank):
@@ -53,8 +54,38 @@ def is_master(rank):
 def optimize(settings):
     """Distributed Optimization Procedure under the specified settings."""
     rank = settings['rank']
+    world_size = settings['world_size']
     model = build_model(settings)
-    # Master process is responsible for the network initialization.
+    # TODO Add testing code.
+    if rank == 0:
+        dist.isend(model, rank + 1)
+    next_rank = (rank + 1) % world_size
+    previous_rank = (rank - 1) % world_size
+    for i in range(0, 10):
+        dist.recv(model, previous_rank)
+        for i in range(0, 1000):
+            model[0][0] += 1
+        dist.isend(model, next_rank)
+        print(model)
+
+
+def isend_parameters(parameters, destination):
+    """Sends the parameterization to the specified rank asynchronously."""
+    raise NotImplementedError
+
+
+def ireceive_parameters(parameters, source):
+    """Receives the parameterization from the specified source rank asynchronously."""
+    raise NotImplementedError
+
+
+def send_parameters(parameters, destination):
+    """Sends the parameterization to the specified rank."""
+    raise NotImplementedError
+
+
+def receive_parameters(parameters, source):
+    """Receives the parameterization from the specified source rank."""
     raise NotImplementedError
 
 
