@@ -33,13 +33,8 @@ def main():
         # Initialize the distributed process group.
         method = distributed_backend + '://' + master_orchestrator + ':' + str(master_orchestrator_port)
         dist.init_process_group(init_method=method, rank=rank, world_size=world_size, backend=distributed_backend)
-        # Check if the current process is the master process.
-        if is_master(rank):
-            # Optimize for the master process.
-            optimize_master(settings)
-        else:
-            # Call the optimization procedure under the specified settings.
-            optimize(settings)
+        # Call the optimization procedure under the specified settings.
+        optimize(settings)
     else:
         # Display the usage information.
         usage()
@@ -71,56 +66,62 @@ def build_model(settings):
     return model
 
 
-def is_master(rank):
-    """Check if the process rank is the master rank (0)."""
-    return rank == 0
-
-
-def optimize_master(settings):
-    """Optimization procedure for the master process."""
-    rank = settings['rank']
-    world_size = settings['world_size']
-    num_iterations = settings['num_iterations']
-    model = build_model(settings)
-    next_rank = (rank + 1) % world_size
-    previous_rank = (rank - 1) % world_size
-    parameter_buffer = make_buffer(model)
-    agn_gradient = make_buffer(model)
-    zero_buffer(agn_gradient)
-    # Send the model to the next process.
-    send_model(model, next_rank)
-    # TODO Add Training.
-    for i in range(0, num_iterations - 1):
-        # Receive the parameterization from the previous worker.
-        receive_parameters(parameter_buffer, previous_rank)
-        set_parameterization(parameter_buffer, model)
-        print(parameter_buffer[0][0][0])
-        send_model(model, next_rank)
-        # TODO Add training.
-    # Collect the final model from the  rank.
-    receive_model(model, previous_rank)
-
-
 def optimize(settings):
     """Distributed Optimization Procedure under the specified settings."""
+    # Fetch the required settings.
     rank = settings['rank']
     world_size = settings['world_size']
     num_iterations = settings['num_iterations']
+    master_rank = settings['master_rank']
+    # Construst the model from the specified settings.
     model = build_model(settings)
-    next_rank = (rank + 1) % world_size
+    # Define the default next and previous rank.
     previous_rank = (rank - 1) % world_size
-    parameter_buffer = make_buffer(model)
-    agn_gradient = make_buffer(model)
-    zero_buffer(agn_gradient)
-    for i in range(0, num_iterations):
-        # Computation is done.
-        agn_gradient[0][0][0] = 1.
-        receive_parameters(parameter_buffer, previous_rank)
-        add_buffer(agn_gradient, parameter_buffer)
-        set_parameterization(parameter_buffer, model)
-        print(parameter_buffer[0][0][0])
+    next_rank = (rank + 1) % world_size
+    # Allocate the data buffers.
+    network_buffer = make_buffer(model)
+    delta_buffer = make_buffer(model)
+    # Clean the buffers.
+    zero_buffer(network_buffer)
+    zero_buffer(delta_buffer)
+    if rank == master_rank:
+        # Send the model parameterization to the next worker.
         send_model(model, next_rank)
-        # TODO Add training.
+    # Start the distributed training.
+    for i in range(0, num_iterations):
+        # TODO Training.
+        delta_buffer[0][0][0] = 1.
+        receive_parameters(network_buffer, previous_rank)
+        add_buffer(delta_buffer, network_buffer)
+        set_parameterization(network_buffer, model)
+        send_model(model, next_rank)
+        print(list(model.parameters())[0][0][0])
+    # Finally, the master needs to collect the final result.
+    if rank == master_rank:
+        save_model(model)
+    # Wait for all processes to complete.
+    synchronize_workers()
+
+
+def save_model(model):
+    """Saves the parameterization of the model to some persistent medium."""
+    # TODO Implement.
+    pass
+
+
+def synchronize_workers(group=None):
+    """Starts a barrier (blocking) procedure to synchronize all workers of a specific group."""
+    if group:
+        dist.barrier(group)
+    else:
+        dist.barrier()
+
+
+def broadcast_model(model, source=0):
+    """Broadcasts the parameterization of the model to all workers."""
+    parameters = [p.data for p in model.parameters()]
+    for p in parameters:
+        dist.broadcast(p, source)
 
 
 def isend_model(model, destination):
@@ -210,6 +211,7 @@ def parse_arguments():
     store_argument_key(settings, key='--master-port', store_in='master_port', default=5000)
     store_argument_key(settings, key='--iterations', store_in='num_iterations', default=1000)
     store_argument_key(settings, key=['--batch-size', '--m'], store_in='batch_size', default=128)
+    store_argument_key(settings, key='--master-rank', store_in='master_rank', default=0)
     # Validate and convert the type of the arguments.
     valid &= validate_argument_key(settings, 'rank', type='int')
     valid &= validate_argument_key(settings, 'world_size', type='int')
@@ -271,6 +273,7 @@ def usage():
     --m [int] Equivalent to the `--batch-size` option.
     --master [string] IP address of the master process. Default '127.0.0.1'.
     --master-port [int] Port on which the master orchestrator will run. Default 5000.
+    --master-rank [int] Rank of the master process. Default 0.
 '''
     print(options)
 
