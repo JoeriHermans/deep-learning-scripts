@@ -40,10 +40,30 @@ def main():
         usage()
 
 
+class Model(torch.nn.Module):
+    """YOUR MODEL HERE."""
+
+    def __init__(self, num_features, num_hidden):
+        super(Model, self).__init__()
+        self.fc_1 = torch.nn.Linear(num_features, num_hidden)
+        self.fc_2 = torch.nn.Linear(num_hidden, num_hidden)
+        self.fc_3 = torch.nn.Linear(num_hidden, 1)
+
+    def forward(self, x):
+        x = F.relu(self.fc_1(x))
+        x = F.relu(self.fc_2(x))
+        x = F.sigmoid(self.fc_3(x))
+
+        return x
+
+
 def build_model(settings):
     """Constructs the model under the specified settings."""
-    # FIXME.
-    return torch.zeros((100, 100))
+    num_features = 100
+    num_hidden = 100
+    model = Model(num_features, num_hidden)
+
+    return model
 
 
 def is_master(rank):
@@ -56,37 +76,39 @@ def optimize(settings):
     rank = settings['rank']
     world_size = settings['world_size']
     model = build_model(settings)
-    # TODO Add testing code.
-    if rank == 0:
-        dist.isend(model, rank + 1)
     next_rank = (rank + 1) % world_size
     previous_rank = (rank - 1) % world_size
+    # TODO Add testing code.
+    if rank == 0:
+        send_model(model, next_rank)
     for i in range(0, 10):
-        dist.recv(model, previous_rank)
-        for i in range(0, 1000):
-            model[0][0] += 1
-        dist.isend(model, next_rank)
-        print(model)
+        receive_model(model, previous_rank)
+        # TODO Add training.
+        send_model(model, next_rank)
 
 
-def isend_parameters(parameters, destination):
-    """Sends the parameterization to the specified rank asynchronously."""
-    raise NotImplementedError
-
-
-def ireceive_parameters(parameters, source):
-    """Receives the parameterization from the specified source rank asynchronously."""
-    raise NotImplementedError
+def send_model(model, destination):
+    """Sends the parameterization of the model to the specified rank."""
+    parameters = list(model.parameters())
+    send_parameters(parameters, destination)
 
 
 def send_parameters(parameters, destination):
     """Sends the parameterization to the specified rank."""
-    raise NotImplementedError
+    for p in parameters:
+        dist.send(p.data, destination)
+
+
+def receive_model(model, source):
+    """Receives the parameterization from the specified rank."""
+    parameters = list(model.parameters())
+    receive_parameters(parameters, source)
 
 
 def receive_parameters(parameters, source):
     """Receives the parameterization from the specified source rank."""
-    raise NotImplementedError
+    for p in parameters:
+        dist.recv(p.data, source)
 
 
 def set_parameterization(model, parameters):
