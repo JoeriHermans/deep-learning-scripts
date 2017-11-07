@@ -33,8 +33,13 @@ def main():
         # Initialize the distributed process group.
         method = distributed_backend + '://' + master_orchestrator + ':' + str(master_orchestrator_port)
         dist.init_process_group(init_method=method, rank=rank, world_size=world_size, backend=distributed_backend)
-        # Call the optimization procedure under the specified settings.
-        optimize(settings)
+        # Check if the current process is the master process.
+        if is_master(rank):
+            # Optimize for the master process.
+            optimize_master(settings)
+        else:
+            # Call the optimization procedure under the specified settings.
+            optimize(settings)
     else:
         # Display the usage information.
         usage()
@@ -59,8 +64,8 @@ class Model(torch.nn.Module):
 
 def build_model(settings):
     """Constructs the model under the specified settings."""
-    num_features = 100
-    num_hidden = 100
+    num_features = 10000
+    num_hidden = 10000
     model = Model(num_features, num_hidden)
 
     return model
@@ -71,17 +76,33 @@ def is_master(rank):
     return rank == 0
 
 
+def optimize_master(settings):
+    """Optimization procedure for the master process."""
+    rank = settings['rank']
+    world_size = settings['world_size']
+    num_iterations = settings['num_iterations']
+    model = build_model(settings)
+    next_rank = (rank + 1) % world_size
+    previous_rank = (rank - 1) % world_size
+    # Send the model to the next process.
+    send_model(model, next_rank)
+    for i in range(0, num_iterations - 1):
+        receive_model(model, previous_rank)
+        # TODO Add training.
+        send_model(model, next_rank)
+    # Collect the final model from the previuos rank.
+    receive_model(model, previous_rank)
+
+
 def optimize(settings):
     """Distributed Optimization Procedure under the specified settings."""
     rank = settings['rank']
     world_size = settings['world_size']
+    num_iterations = settings['num_iterations']
     model = build_model(settings)
     next_rank = (rank + 1) % world_size
     previous_rank = (rank - 1) % world_size
-    # TODO Add testing code.
-    if rank == 0:
-        send_model(model, next_rank)
-    for i in range(0, 10):
+    for i in range(0, num_iterations):
         receive_model(model, previous_rank)
         # TODO Add training.
         send_model(model, next_rank)
@@ -131,6 +152,7 @@ def parse_arguments():
     store_argument_key(settings, key='--backend', store_in='backend', default='tcp')
     store_argument_key(settings, key='--master', store_in='master', default='127.0.0.1')
     store_argument_key(settings, key='--master-port', store_in='master_port', default=5000)
+    store_argument_key(settings, key='--iterations', store_in='num_iterations', default=1000)
     # Validate and convert the type of the arguments.
     valid &= validate_argument_key(settings, 'rank', type='int')
     valid &= validate_argument_key(settings, 'world_size', type='int')
@@ -139,6 +161,7 @@ def parse_arguments():
     valid &= validate_argument_key(settings, 'backend', type='string')
     valid &= validate_argument_key(settings, 'master', type='string')
     valid &= validate_argument_key(settings, 'master_port', type='int')
+    valid &= validate_argument_key(settings, 'num_iterations', type='int')
     # Set the validation flag of the settings.
     settings['valid'] = valid
 
@@ -186,6 +209,7 @@ def usage():
     --communication-frequency [int] Number of local iterations before announcing ready state. Default 15 Hz.
     --master-port [int] Port on which the master orchestrator will run. Default 5000.
     --master [string] IP address of the master process. Default '127.0.0.1'.
+    --iterations [int] Number of local mini-batches that have to be evaluated. Default 1000.
 '''
     print(options)
 
