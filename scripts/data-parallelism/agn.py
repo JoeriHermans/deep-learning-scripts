@@ -148,11 +148,12 @@ def parse_arguments():
     store_argument_key(settings, key='--rank', store_in='rank', default=None)
     store_argument_key(settings, key='--world-size', store_in='world_size', default=None)
     store_argument_key(settings, key='--annouce-port', store_in='announce_port', default=5001)
-    store_argument_key(settings, key='--communication-frequency', store_in='communication_frequency', default=15)
+    store_argument_key(settings, key=['--communication-frequency', '--lambda'], store_in='communication_frequency', default=15)
     store_argument_key(settings, key='--backend', store_in='backend', default='tcp')
     store_argument_key(settings, key='--master', store_in='master', default='127.0.0.1')
     store_argument_key(settings, key='--master-port', store_in='master_port', default=5000)
     store_argument_key(settings, key='--iterations', store_in='num_iterations', default=1000)
+    store_argument_key(settings, key=['--batch-size', '--m'], store_in='batch_size', default=128)
     # Validate and convert the type of the arguments.
     valid &= validate_argument_key(settings, 'rank', type='int')
     valid &= validate_argument_key(settings, 'world_size', type='int')
@@ -172,6 +173,7 @@ def store_argument_key(settings, key, store_in, default=None):
     """Stores the value of the specfied key in the settings map under the 'store_in' key.
     Sets the default value if it is not present.
     """
+    # TODO Fix situation when key is an array.
     if key in sys.argv and sys.argv.index(key) + 1 < len(sys.argv):
         settings[store_in] = sys.argv[sys.argv.index(key) + 1]
     else:
@@ -204,12 +206,15 @@ def usage():
     --world-size [int] Total number of workers involved in the optimization process.
 
 \033[1mOptional Arguments:\033[0m
-    --backend [string] PyTorch Distributed backend ('tcp', 'mpi', or 'gloo'). Default 'tcp'.
     --annouce-port [int] Port responsible for handling broadcast requests. Default 5001.
+    --backend [string] PyTorch Distributed backend ('tcp', 'mpi', or 'gloo'). Default 'tcp'.
+    --batch-size [int] Size of the mini-batch. Default 128.
     --communication-frequency [int] Number of local iterations before announcing ready state. Default 15 Hz.
-    --master-port [int] Port on which the master orchestrator will run. Default 5000.
-    --master [string] IP address of the master process. Default '127.0.0.1'.
     --iterations [int] Number of local mini-batches that have to be evaluated. Default 1000.
+    --lambda [int] Equivalent to the `--communication-frequency` option.
+    --m [int] Equivalent to the `--batch-size` option.
+    --master [string] IP address of the master process. Default '127.0.0.1'.
+    --master-port [int] Port on which the master orchestrator will run. Default 5000.
 '''
     print(options)
 
