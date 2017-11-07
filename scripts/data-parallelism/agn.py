@@ -64,8 +64,8 @@ class Model(torch.nn.Module):
 
 def build_model(settings):
     """Constructs the model under the specified settings."""
-    num_features = 10000
-    num_hidden = 10000
+    num_features = 10
+    num_hidden = 10
     model = Model(num_features, num_hidden)
 
     return model
@@ -84,13 +84,20 @@ def optimize_master(settings):
     model = build_model(settings)
     next_rank = (rank + 1) % world_size
     previous_rank = (rank - 1) % world_size
+    parameter_buffer = make_buffer(model)
+    agn_gradient = make_buffer(model)
+    zero_buffer(agn_gradient)
     # Send the model to the next process.
     send_model(model, next_rank)
+    # TODO Add Training.
     for i in range(0, num_iterations - 1):
-        receive_model(model, previous_rank)
-        # TODO Add training.
+        # Receive the parameterization from the previous worker.
+        receive_parameters(parameter_buffer, previous_rank)
+        set_parameterization(parameter_buffer, model)
+        print(parameter_buffer[0][0][0])
         send_model(model, next_rank)
-    # Collect the final model from the previuos rank.
+        # TODO Add training.
+    # Collect the final model from the  rank.
     receive_model(model, previous_rank)
 
 
@@ -102,42 +109,91 @@ def optimize(settings):
     model = build_model(settings)
     next_rank = (rank + 1) % world_size
     previous_rank = (rank - 1) % world_size
+    parameter_buffer = make_buffer(model)
+    agn_gradient = make_buffer(model)
+    zero_buffer(agn_gradient)
     for i in range(0, num_iterations):
-        receive_model(model, previous_rank)
-        # TODO Add training.
+        # Computation is done.
+        agn_gradient[0][0][0] = 1.
+        receive_parameters(parameter_buffer, previous_rank)
+        add_buffer(agn_gradient, parameter_buffer)
+        set_parameterization(parameter_buffer, model)
+        print(parameter_buffer[0][0][0])
         send_model(model, next_rank)
+        # TODO Add training.
+
+
+def isend_model(model, destination):
+    """Sends the parameterization of the model asynchronously."""
+    parameters = [p.data for p in model.parameters()]
+    isend_parameters(parameters, destination)
 
 
 def send_model(model, destination):
     """Sends the parameterization of the model to the specified rank."""
-    parameters = list(model.parameters())
+    parameters = [p.data for p in model.parameters()]
     send_parameters(parameters, destination)
 
 
 def send_parameters(parameters, destination):
     """Sends the parameterization to the specified rank."""
     for p in parameters:
-        dist.send(p.data, destination)
+        dist.send(p, destination)
+
+
+def isend_parameters(parameters, destination):
+    """Sends the specified parameters asynchronously to the destination."""
+    for p in parameters:
+        dist.isend(p, destination)
 
 
 def receive_model(model, source):
     """Receives the parameterization from the specified rank."""
-    parameters = list(model.parameters())
+    parameters = [p.data for p in model.parameters()]
     receive_parameters(parameters, source)
 
 
 def receive_parameters(parameters, source):
     """Receives the parameterization from the specified source rank."""
     for p in parameters:
-        dist.recv(p.data, source)
+        dist.recv(p, source)
 
 
-def set_parameterization(model, parameters):
+def set_parameterization(parameters, model):
     """Sets the tensors of the model to the specified set of parameters."""
-    i = 0
-    for p in model.parameters():
-        p.data.copy_(parameters[i], async=True)
-        i += i
+    tensors = list(model.parameters())
+    num_tensors = len(tensors)
+    for i in range(0, num_tensors):
+        tensors[i].data.copy_(parameters[i], async=True)
+
+
+def add_buffer(source, destination):
+    """Adds the source parameter buffer to the specified destination."""
+    num_parameters = len(source)
+    for i in range(0, num_parameters):
+        destination[i] += source[i]
+
+
+def copy_buffer(source, destination):
+    """Copies the specified buffer from source to destination."""
+    num_parameters = len(source)
+    for i in range(0, num_parameters):
+        destination[i].copy_(source[i], async=True)
+
+
+def make_buffer(model):
+    """Copies the trainable tensors of the model to create a list of buffer tensors."""
+    parameter_buffer = []
+    for p in list(model.parameters()):
+        parameter_buffer.append(p.clone().data)
+
+    return parameter_buffer
+
+
+def zero_buffer(parameters):
+    """Zeros all the tensors in the parameter list."""
+    for p in parameters:
+        p.zero_()
 
 
 def parse_arguments():
