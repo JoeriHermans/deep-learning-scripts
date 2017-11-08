@@ -1,191 +1,322 @@
-"""PyTorch script which is intended to show the performance of
-Asynchronous Data Parallelism using DOWNPOUR. Parameter sharing
-is done using MPI.
+"""PyTorch Boilerplate Code for DOWNPOUR.
 
 Author:    Joeri R. Hermans
-Date:      4 July, 2017"""
-
+Date:      2 November 2017
+"""
 
 from torch.autograd import *
 from torch.optim import *
 
-from mpi4py import MPI as mpi
-import numpy as np
+import numpy as os
 import os
+import pickle
 import sys
 import time
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as transforms
-import pickle
-
-
-def get_parameters(model):
-    """Returns the parameters of the model in a Numpy format."""
-    parameters = []
-    for p in model.parameters():
-        parameters.append(p.data)
-
-    return parameters
-
-
-def set_parameterization(model, parameters):
-    """Sets the specified parameters to the model."""
-    i = 0
-    for p in model.parameters():
-        p.data.copy_(parameters[i], async=True)
-        i += 1
-
-
-def fill_parameters(parameters, value):
-    for p in parameters:
-        p.fill_(value)
-
-
-def apply_delta(tensors, delta):
-    i = 0
-    for t in tensors:
-        torch.add(t, 1, delta[i], out=t)
-        i += 1
-
-
-def run_parameter_server(comm, model):
-    """Runs the parameter server procedure."""
-    training = True
-    central_variable = get_parameters(model)
-    # Send the central variable to all workers.
-    comm.bcast(central_variable, root=0)
-    # Wait for all workers to be initialized.
-    comm.barrier()
-    print("Workers synchronized")
-    sys.stdout.flush()
-    # Add testing code.
-    i = 0
-    while i < 10 - 1:
-        delta = comm.recv(source=mpi.ANY_SOURCE, tag=0)
-        apply_delta(central_variable, delta)
-        i += 1
-
-
-def run_worker(comm, model, rank):
-    """Runs the worker procedure."""
-    central_variable = None
-    # Receive the central variable from the parameter server.
-    central_variable = comm.bcast(central_variable, root=0)
-    set_parameterization(model, central_variable)
-    # Wait for all workers to initialize.
-    comm.barrier()
-    # Add testing code.
-    fill_parameters(central_variable, 1.0)
-    comm.send(central_variable, dest=0, tag=0)
 
 
 def main():
-    """Entry point of the training script."""
-    comm = mpi.COMM_WORLD
-    rank = comm.Get_rank()
-    model = build_model()
-    if rank == 0:
-        run_parameter_server(comm, model)
+    """Main entry point of the distributed optimization mechanism."""
+    # Fetch the settings from the arguments.
+    settings = parse_arguments()
+    # Check if the provided settings are valid.
+    if settings['valid']:
+        # Initialize the distributed backend.
+        distributed_backend = settings['backend']
+        master_orchestrator = settings['master']
+        master_orchestrator_port = settings['master_port']
+        # Obtain additional settings required for the distributed initialization.
+        rank = settings['rank']
+        world_size = settings['world_size']
+        # Initialize the distributed process group.
+        method = distributed_backend + '://' + master_orchestrator + ':' + str(master_orchestrator_port)
+        dist.init_process_group(init_method=method, rank=rank, world_size=world_size, backend=distributed_backend)
+        # Call the optimization procedure under the specified settings.
+        optimize(settings)
     else:
-        run_worker(comm, model, rank)
+        # Display the usage information.
+        usage()
 
 
 class Model(torch.nn.Module):
+    """YOUR MODEL HERE."""
 
-    def __init__(self):
+    def __init__(self, num_features, num_hidden):
         super(Model, self).__init__()
-        self.conv1 = torch.nn.Conv2d(3, 6, 5)
-        self.pool = torch.nn.MaxPool2d(2, 2)
-        self.conv2 = torch.nn.Conv2d(6, 16, 5)
-        self.fc1 = torch.nn.Linear(16 * 5 * 5, 5000)
-        self.fc2 = torch.nn.Linear(5000, 5000)
-        self.fc3 = torch.nn.Linear(5000, 10)
+        self.fc_1 = torch.nn.Linear(num_features, num_hidden)
+        self.fc_2 = torch.nn.Linear(num_hidden, num_hidden)
+        self.fc_3 = torch.nn.Linear(num_hidden, 1)
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = F.relu(self.fc_1(x))
+        x = F.relu(self.fc_2(x))
+        x = F.sigmoid(self.fc_3(x))
 
         return x
 
 
-def build_model():
-    """Returns the Torch model."""
-    return Model()
+def allocate_optimizer(settings, model):
+    """Constructs the optimizer object under the specified settings."""
+    optimizer = torch.optim.Adam(model.parameters())
+
+    return optimizer
 
 
-def optimize():
-    """Runs the optimization procedure."""
-    # Build the Torch model.
-    model = build_model()
-    model.zero_grad()
-    parameters = model.parameters()
-    # Get the data.
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=False, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=True, num_workers=2)
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=False, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=4, shuffle=False, num_workers=2)
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-    # Specify the optimizer parameters.
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-    # Training.
-    for epoch in range(2):  # loop over the dataset multiple times
-        running_loss = 0.0
-        for i, data in enumerate(trainloader, 0):
-            # get the inputs
-            inputs, labels = data
-            # wrap them in Variable
-            inputs, labels = Variable(inputs), Variable(labels)
-            # zero the parameter gradients
-            optimizer.zero_grad()
-            # forward + backward + optimize
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
+def allocate_loss(settings):
+    """Allocates the specified loss function, or a different custom loss function."""
+    loss = torch.nn.MSELoss()
+
+    return loss
+
+
+def allocate_model(settings):
+    """Constructs the model under the specified settings."""
+    num_features = 10
+    num_hidden = 10
+    model = Model(num_features, num_hidden)
+
+    return model
+
+
+def optimize(settings):
+    """Distributed Optimization Procedure under the specified settings."""
+    # Fetch the required settings.
+    rank = settings['rank']
+    world_size = settings['world_size']
+    num_iterations = settings['num_iterations']
+    master_rank = settings['master_rank']
+    batch_size = settings['batch_size']
+    communication_frequency = settings['communication_frequency']
+    # Construst the model, optimizer, and loss function from the specified settings.
+    model = allocate_model(settings)
+    optimizer = allocate_optimizer(settings, model)
+    loss = allocate_loss(settings)
+    # Define the default next and previous rank.
+    previous_rank = (rank - 1) % world_size
+    next_rank = (rank + 1) % world_size
+    # Allocate the data buffers.
+    network_buffer = make_buffer(model)
+    delta_buffer = make_buffer(model)
+    # Clean the buffers.
+    zero_buffer(network_buffer)
+    zero_buffer(delta_buffer)
+    if rank == master_rank:
+        # Send the model parameterization to the next worker.
+        send_model(model, next_rank)
+    # Start the distributed training.
+    for i in range(0, num_iterations):
+        receive_parameters(network_buffer, previous_rank)
+        add_buffer(delta_buffer, network_buffer)
+        set_parameterization(network_buffer, model)
+        send_model(model, next_rank)
+        # Do local computations.
+        for j in range(0, communication_frequency):
+            x = torch.autograd.Variable(torch.FloatTensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]), requires_grad=True)
+            y = torch.autograd.Variable(torch.FloatTensor([0]))
+            y_prediction = model.forward(x)
+            l = loss(y_prediction, y)
+            l.backward()
             optimizer.step()
-            # print statistics
-            running_loss += loss.data[0]
-            if i % 2000 == 1999:    # print every 2000 mini-batches
-                print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 2000))
-                running_loss = 0.0
-    print('Finished Training')
+        # Compute the DOWNPOUR gradient.
+        model_parameters = [x.data for x in model.parameters()]
+        subtract_buffer(model_parameters, network_buffer, delta_buffer)
+    # Finally, the master needs to collect the final result.
+    if rank == master_rank:
+        save_model(model)
+    print("Final loss: " + str(l))
+    # Wait for all processes to complete.
+    synchronize_workers()
 
 
-def help():
-    """Displays the help message of this script."""
-    logo = '''
-
-     DOWNPOUR                 `-::/:/+osoosoo+:::-.`
-                         `-:/soosooooso+oossso+oooso+/.
-                      . +ssoso++ooo+so+++soo+osoooososso-
-                     ./oso+o+++s+++s++oos+oooo++oo++ooooso`
-                    +oos+++osoooooos++oy++++s+++soooo+soosy+.
-                   +o++o+++oso+oo++s+++oo+++o+ooo+++os++o+oss`
-                  .yoooo+ooo++++s++s++s++++s+++++oo++ss+oo+so+-
-                .oso+ooooo++++s++++++soossoooso+++++++so+oooo-
-                 +so+oo+++oo+oosoooossoo++++++oo+++++sooo+s+ss-
-                  /osyoo++ooo+++++++o+++oo+++++++++oo+++ooo+ss+
-                   :+++sys++oo++++oo+++osooosso+ooo+++oo+s+++ss
-                     .-:+o+++ssoossoooo+o+++o+oooo+++oo++osos+s
-                         /++oso+++so+++++oo+++++++++o++oooo+ss+
-                          :+ssoo++oooooooo+oooooooosoooo+++sos.
-                            .:++ooo+++ooso+oossooooooooosooo/`
-                                      .++o////++/--////++`
-                                        :oo+/:://////:-+.
-                                         -oooo++++++::-`
-                                          .o+o`
-                                           .//.
+def save_model(model):
+    """Saves the parameterization of the model to some persistent medium."""
+    # TODO Implement to whatever.
+    pass
 
 
+def synchronize_workers(group=None):
+    """Starts a barrier (blocking) procedure to synchronize all workers of a specific group."""
+    if group:
+        dist.barrier(group)
+    else:
+        dist.barrier()
+
+
+def broadcast_model(model, source=0):
+    """Broadcasts the parameterization of the model to all workers."""
+    parameters = [p.data for p in model.parameters()]
+    for p in parameters:
+        dist.broadcast(p, source)
+
+
+def isend_model(model, destination):
+    """Sends the parameterization of the model asynchronously."""
+    parameters = [p.data for p in model.parameters()]
+    isend_parameters(parameters, destination)
+
+
+def send_model(model, destination):
+    """Sends the parameterization of the model to the specified rank."""
+    parameters = [p.data for p in model.parameters()]
+    send_parameters(parameters, destination)
+
+
+def send_parameters(parameters, destination):
+    """Sends the parameterization to the specified rank."""
+    for p in parameters:
+        dist.send(p, destination)
+
+
+def isend_parameters(parameters, destination):
+    """Sends the specified parameters asynchronously to the destination."""
+    for p in parameters:
+        dist.isend(p, destination)
+
+
+def receive_model(model, source):
+    """Receives the parameterization from the specified rank."""
+    parameters = [p.data for p in model.parameters()]
+    receive_parameters(parameters, source)
+
+
+def receive_parameters(parameters, source):
+    """Receives the parameterization from the specified source rank."""
+    for p in parameters:
+        dist.recv(p, source)
+
+
+def set_parameterization(parameters, model):
+    """Sets the tensors of the model to the specified set of parameters."""
+    tensors = list(model.parameters())
+    num_tensors = len(tensors)
+    for i in range(0, num_tensors):
+        tensors[i].data.copy_(parameters[i], async=True)
+
+
+def divide_buffer(source, divisor):
+    """Divides the specified source with the specified divisor."""
+    num_parameters = len(source)
+    for i in range(0, num_parameters):
+        source[i] /= divisor
+
+
+def add_buffer(source, destination):
+    """Adds the source parameter buffer to the specified destination."""
+    num_parameters = len(source)
+    for i in range(0, num_parameters):
+        destination[i] += source[i]
+
+
+def subtract_buffer(source_1, source_2, destination):
+    """Subtracts source_2 from source_1 and stores the result in the destination buffer."""
+    num_parameters = len(source_1)
+    for i in range(0, num_parameters):
+        destination[i] = source_1[i] - source_2[i]
+
+
+def copy_buffer(source, destination):
+    """Copies the specified buffer from source to destination."""
+    num_parameters = len(source)
+    for i in range(0, num_parameters):
+        destination[i].copy_(source[i], async=True)
+
+
+def make_buffer(model):
+    """Copies the trainable tensors of the model to create a list of buffer tensors."""
+    parameter_buffer = []
+    for p in list(model.parameters()):
+        parameter_buffer.append(p.clone().data)
+
+    return parameter_buffer
+
+
+def zero_buffer(parameters):
+    """Zeros all the tensors in the parameter list."""
+    for p in parameters:
+        p.zero_()
+
+
+def parse_arguments():
+    """Parses the provided program arguments, and validates the types."""
+    settings = {}
+    valid = True
+    # Obtain and store the arguments.
+    store_argument_key(settings, key='--rank', store_in='rank', default=None)
+    store_argument_key(settings, key='--world-size', store_in='world_size', default=None)
+    store_argument_key(settings, key='--annouce-port', store_in='announce_port', default=5001)
+    store_argument_key(settings, key=['--communication-frequency', '--lambda'], store_in='communication_frequency', default=15)
+    store_argument_key(settings, key='--backend', store_in='backend', default='tcp')
+    store_argument_key(settings, key='--master', store_in='master', default='127.0.0.1')
+    store_argument_key(settings, key='--master-port', store_in='master_port', default=5000)
+    store_argument_key(settings, key='--iterations', store_in='num_iterations', default=1000)
+    store_argument_key(settings, key=['--batch-size', '--m'], store_in='batch_size', default=128)
+    store_argument_key(settings, key='--master-rank', store_in='master_rank', default=0)
+    # Validate and convert the type of the arguments.
+    valid &= validate_argument_key(settings, 'rank', type='int')
+    valid &= validate_argument_key(settings, 'world_size', type='int')
+    valid &= validate_argument_key(settings, 'announce_port', type='int')
+    valid &= validate_argument_key(settings, 'communication_frequency', type='int')
+    valid &= validate_argument_key(settings, 'backend', type='string')
+    valid &= validate_argument_key(settings, 'master', type='string')
+    valid &= validate_argument_key(settings, 'master_port', type='int')
+    valid &= validate_argument_key(settings, 'num_iterations', type='int')
+    # Set the validation flag of the settings.
+    settings['valid'] = valid
+
+    return settings
+
+
+def store_argument_key(settings, key, store_in, default=None):
+    """Stores the value of the specfied key in the settings map under the 'store_in' key.
+    Sets the default value if it is not present.
+    """
+    # TODO Fix situation when key is an array.
+    if key in sys.argv and sys.argv.index(key) + 1 < len(sys.argv):
+        settings[store_in] = sys.argv[sys.argv.index(key) + 1]
+    else:
+        settings[store_in] = default
+
+
+def validate_argument_key(settings, key, type=None):
+    """Validates the type of the specified key, and converts it if necessary."""
+    valid = False
+    if key in settings.keys():
+        try:
+            # Check if any conversion needs to be done.
+            if type == 'int':
+                settings[key] = int(settings[key])
+            elif type == 'float':
+                settings[key] = float(settings[key])
+            valid = True
+        except:
+            pass
+
+    return valid
+
+
+def usage():
+    """Displays the usage message of this script."""
+    options = '''\033[1mDOWNPOUR\033[0m
+
+\033[1mRequired Arguments:\033[0m
+    --rank [int] Rank-identifier of the local optimization process.
+    --world-size [int] Total number of workers involved in the optimization process.
+
+\033[1mOptional Arguments:\033[0m
+    --annouce-port [int] Port responsible for handling broadcast requests. Default 5001.
+    --backend [string] PyTorch Distributed backend ('tcp', 'mpi', or 'gloo'). Default 'tcp'.
+    --batch-size [int] Size of the mini-batch. Default 128.
+    --communication-frequency [int] Number of local iterations before announcing ready state. Default 15 Hz.
+    --iterations [int] Number of local mini-batches that have to be evaluated. Default 1000.
+    --lambda [int] Equivalent to the `--communication-frequency` option.
+    --m [int] Equivalent to the `--batch-size` option.
+    --master [string] IP address of the master process. Default '127.0.0.1'.
+    --master-port [int] Port on which the master orchestrator will run. Default 5000.
+    --master-rank [int] Rank of the master process. Default 0.
 '''
-    print(logo)
+    print(options)
 
 
 if __name__ == '__main__':
