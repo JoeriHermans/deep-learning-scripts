@@ -17,7 +17,7 @@ def main():
     # Beam Energy = 43 Gev, and Fermi's Constant is 0.9
     theta_true = [43.0, 0.9]
     # Assume there is an experiment drawing (real) samples from nature.
-    p_r = real_experiment(theta_true, 10000)
+    p_r = real_experiment(theta_true, 100000)
     # Initialize the prior of theta, parameterized by a Gaussian.
     proposal = {'mu': [], 'sigma': []}
     # Check if a custom mu has been specified.
@@ -32,9 +32,9 @@ def main():
         # Add random Fermi constant.
         add_prior_fermi_constant(proposal)
     # Check if a custom sigma has been specified.
-    if '--sigma' in sys.argv and '--mu' in sys.argv:
+    if '--sigma' in sys.argv:
         sigma = sys.argv[sys.argv.index('--sigma') + 1].split(",")
-        sigma = [float(e) for e in sigma]
+        sigma = [np.log(float(e)) for e in sigma]
         proposal['sigma'] = sigma
     else:
         # Initialize default sigma.
@@ -56,7 +56,7 @@ def main():
     if '--normalize' in sys.argv:
         proposal['mu'] = normalize(proposal['mu'])
     # Fit the proposal distribution to the real distribution using the critic.
-    fit(proposal, p_r, critic, theta_true, batch_size)
+    fit(proposal=proposal, p_r=p_r, critic=critic, theta_true=theta_true, batch_size=batch_size)
     # Display the current parameterization of the proposal distribution.
     print("\nProposal Distribution:")
     print(" - Beam Energy:")
@@ -88,8 +88,9 @@ def denormalize(mu):
     return mu
 
 
-def fit(proposal, p_r, critic, theta_true, num_iterations=100, batch_size=256):
+def fit(proposal, p_r, critic, theta_true, num_iterations=100000, batch_size=256):
     critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
+    print(num_iterations)
     for iteration in range(0, num_iterations):
         print("True Mu: " + str(theta_true))
         print("Current Mu: " + str(denormalize(proposal['mu'])))
@@ -139,18 +140,17 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         # Compute the gradient of the Gaussian logpdf.
         theta = torch.autograd.Variable(normalize(theta), requires_grad=False)
         logpdf = gaussian_logpdf(mu, sigma, theta)
-        logpdf.mean().backward()
+        logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
         # Add the logpdf gradient to the current variational upperbound.
-        gradient_u_mu += -likelihood_x.data * gradient_logpdf_mu
-        gradient_u_sigma += -likelihood_x.data * gradient_logpdf_sigma
+        gradient_u_mu += likelihood_x.data * gradient_logpdf_mu
+        gradient_u_sigma += likelihood_x.data * gradient_logpdf_sigma
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
-    differential_entropy.mean().backward()
+    differential_entropy.sum().backward()
     gradient_entropy_sigma = sigma.grad.data
-    print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
     gradient_u_mu = .01 * ((1. / batch_size) * gradient_u_mu)
     gradient_u_sigma = .01 * ((1. / batch_size) * gradient_u_sigma + gamma * gradient_entropy_sigma)
