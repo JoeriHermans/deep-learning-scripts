@@ -246,7 +246,7 @@ def parse_arguments():
     store_argument_key(settings, key='--rank', store_in='rank', default=None)
     store_argument_key(settings, key='--world-size', store_in='world_size', default=None)
     store_argument_key(settings, key='--annouce-port', store_in='announce_port', default=5001)
-    store_argument_key(settings, key=['--communication-frequency', '--lambda'], store_in='communication_frequency', default=15)
+    store_argument_key(settings, key=['--communication-frequency', '--lambda'], store_in='communication_frequency', default=1)
     store_argument_key(settings, key='--backend', store_in='backend', default='tcp')
     store_argument_key(settings, key='--master', store_in='master', default='127.0.0.1')
     store_argument_key(settings, key='--master-port', store_in='master_port', default=5000)
@@ -308,7 +308,7 @@ def usage():
     --annouce-port [int] Port responsible for handling broadcast requests. Default 5001.
     --backend [string] PyTorch Distributed backend ('tcp', 'mpi', or 'gloo'). Default 'tcp'.
     --batch-size [int] Size of the mini-batch. Default 128.
-    --communication-frequency [int] Number of local iterations before announcing ready state. Default 15 Hz.
+    --communication-frequency [int] Number of local iterations before announcing ready state. Default 1 Hz.
     --iterations [int] Number of local mini-batches that have to be evaluated. Default 1000.
     --lambda [int] Equivalent to the `--communication-frequency` option.
     --m [int] Equivalent to the `--batch-size` option.
