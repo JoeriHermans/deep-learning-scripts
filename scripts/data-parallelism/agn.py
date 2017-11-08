@@ -64,6 +64,13 @@ def allocate_optimizer(settings, model):
     return optimizer
 
 
+def allocate_loss(settings):
+    """Allocates the specified loss function, or a different custom loss function."""
+    loss = torch.nn.MSELoss()
+
+    return loss
+
+
 def allocate_model(settings):
     """Constructs the model under the specified settings."""
     num_features = 10
@@ -80,9 +87,12 @@ def optimize(settings):
     world_size = settings['world_size']
     num_iterations = settings['num_iterations']
     master_rank = settings['master_rank']
-    # Construst the model and optimizer from the specified settings.
+    batch_size = settings['batch_size']
+    communication_frequency = settings['communication_frequency']
+    # Construst the model, optimizer, and loss function from the specified settings.
     model = allocate_model(settings)
     optimizer = allocate_optimizer(settings, model)
+    loss = allocate_loss(settings)
     # Define the default next and previous rank.
     previous_rank = (rank - 1) % world_size
     next_rank = (rank + 1) % world_size
@@ -97,16 +107,26 @@ def optimize(settings):
         send_model(model, next_rank)
     # Start the distributed training.
     for i in range(0, num_iterations):
-        # TODO Training.
-        delta_buffer[0][0][0] = 1.
         receive_parameters(network_buffer, previous_rank)
         add_buffer(delta_buffer, network_buffer)
         set_parameterization(network_buffer, model)
         send_model(model, next_rank)
-        print(list(model.parameters())[0][0][0])
+        # Do local computations.
+        for j in range(0, communication_frequency):
+            x = torch.autograd.Variable(torch.FloatTensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]), requires_grad=True)
+            y = torch.autograd.Variable(torch.FloatTensor([0]))
+            y_prediction = model.forward(x)
+            l = loss(y_prediction, y)
+            l.backward()
+            optimizer.step()
+        # Compute the AGN gradient.
+        model_parameters = [x.data for x in model.parameters()]
+        subtract_buffer(model_parameters, network_buffer, delta_buffer)
+        divide_buffer(delta_buffer, communication_frequency)
     # Finally, the master needs to collect the final result.
     if rank == master_rank:
         save_model(model)
+    print("Final loss: " + str(l))
     # Wait for all processes to complete.
     synchronize_workers()
 
@@ -176,11 +196,25 @@ def set_parameterization(parameters, model):
         tensors[i].data.copy_(parameters[i], async=True)
 
 
+def divide_buffer(source, divisor):
+    """Divides the specified source with the specified divisor."""
+    num_parameters = len(source)
+    for i in range(0, num_parameters):
+        source[i] /= divisor
+
+
 def add_buffer(source, destination):
     """Adds the source parameter buffer to the specified destination."""
     num_parameters = len(source)
     for i in range(0, num_parameters):
         destination[i] += source[i]
+
+
+def subtract_buffer(source_1, source_2, destination):
+    """Subtracts source_2 from source_1 and stores the result in the destination buffer."""
+    num_parameters = len(source_1)
+    for i in range(0, num_parameters):
+        destination[i] = source_1[i] - source_2[i]
 
 
 def copy_buffer(source, destination):
