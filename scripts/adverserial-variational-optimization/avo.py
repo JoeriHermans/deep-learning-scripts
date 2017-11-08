@@ -26,7 +26,7 @@ def main():
         mu = [float(e) for e in mu]
         proposal['mu'] = mu
         #proposal['sigma'] = [np.log(.1), np.log(.01)]
-        proposal['sigma'] = [.1, .1]
+        proposal['sigma'] = [np.log(.1), np.log(.1)]
     else:
         # Add random beam energy.
         add_prior_beam_energy(proposal)
@@ -39,7 +39,7 @@ def main():
         proposal['sigma'] = sigma
     else:
         # Initialize default sigma.
-        proposal['sigma'] = [.1, .1]
+        proposal['sigma'] = [np.log(.1), np.log(.1)]
     # Convert the proposal lists to PyTorch Tensors.
     proposal['mu'] = torch.FloatTensor(proposal['mu'])
     proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
@@ -72,8 +72,8 @@ def main():
 
 
 def normalize(mu):
-    min_mu = torch.FloatTensor([40, 0])
-    max_mu = torch.FloatTensor([50, 2])
+    min_mu = torch.FloatTensor([30, 0])
+    max_mu = torch.FloatTensor([60, 2])
     if '--normalize' in sys.argv:
         mu = (mu - min_mu) / (max_mu - min_mu)
 
@@ -81,8 +81,8 @@ def normalize(mu):
 
 
 def denormalize(mu):
-    min_mu = torch.FloatTensor([40, 0])
-    max_mu = torch.FloatTensor([50, 2])
+    min_mu = torch.FloatTensor([30, 0])
+    max_mu = torch.FloatTensor([60, 2])
     if '--normalize' in sys.argv:
         mu = mu * (max_mu - min_mu) + min_mu
 
@@ -91,7 +91,6 @@ def denormalize(mu):
 
 def fit(proposal, p_r, critic, theta_true, num_iterations=100000, batch_size=256):
     critic_optimizer = torch.optim.Adam(critic.parameters(), lr=0.01)
-    print(num_iterations)
     for iteration in range(0, num_iterations):
         print("True Mu: " + str(theta_true))
         print("Current Mu: " + str(denormalize(proposal['mu'])))
@@ -102,7 +101,7 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=100000, batch_size=256
         fit_proposal(proposal, p_r, critic, batch_size)
 
 
-def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=100, batch_size=256):
+def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=1000, batch_size=256):
     # Generate the simulation data.
     x_g = sample_generated_data(proposal, batch_size)
     # Fit the critic optimally.
@@ -125,7 +124,7 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=100, batc
     print("Loss: " + str(loss.mean().data.numpy()[0]))
 
 
-def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=8.0):
+def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     gradient_u_mu = torch.FloatTensor([0, 0])
     gradient_u_sigma = torch.FloatTensor([0, 0])
     gradient_entropy_sigma = torch.FloatTensor([0, 0])
@@ -139,9 +138,9 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=8.0):
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
         # Compute the gradient of the Gaussian logpdf.
-        theta = torch.autograd.Variable(normalize(theta), requires_grad=True)
+        theta = torch.autograd.Variable(normalize(theta))
         logpdf = gaussian_logpdf(mu, sigma, theta)
-        logpdf.sum().backward()
+        logpdf.mean().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
         # Add the logpdf gradient to the current variational upperbound.
@@ -150,7 +149,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=8.0):
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
-    differential_entropy.sum().backward()
+    differential_entropy.mean().backward()
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
     gradient_u_mu = .01 * ((1. / batch_size) * gradient_u_mu)
@@ -158,7 +157,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=8.0):
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
-    proposal['sigma'] = proposal['sigma'].exp().log()
+    proposal['sigma'] = proposal['sigma'].exp().log() + 0.01
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -244,7 +243,6 @@ def draw_gaussian(d, num_samples, random_state=None):
     num_parameters = len(d['mu'])
     thetas = torch.zeros((num_samples, num_parameters))
     mu = denormalize(d['mu'])
-    #sigma = d['sigma'].exp()
     sigma = d['sigma'].exp()
     for i in range(0, num_samples):
         gaussian = torch.normal(mu, sigma)
