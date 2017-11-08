@@ -38,7 +38,7 @@ def main():
         proposal['sigma'] = sigma
     else:
         # Initialize default sigma.
-        proposal['sigma'] = [np.log(.1), np.log(.01)]
+        proposal['sigma'] = [np.log(.1), np.log(.1)]
     # Convert the proposal lists to PyTorch Tensors.
     proposal['mu'] = torch.FloatTensor(proposal['mu'])
     proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
@@ -132,14 +132,14 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
-        x = torch.autograd.Variable(simulator(theta, 1), requires_grad=False)
+        x = torch.autograd.Variable(simulator(theta, 1), requires_grad=True)
         likelihood_x = critic(x).mean().view(-1)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
         # Compute the gradient of the Gaussian logpdf.
         theta = torch.autograd.Variable(normalize(theta), requires_grad=False)
         logpdf = gaussian_logpdf(mu, sigma, theta)
-        logpdf.sum().backward()
+        logpdf.mean().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
         # Add the logpdf gradient to the current variational upperbound.
@@ -148,7 +148,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
-    differential_entropy.sum().backward()
+    differential_entropy.mean().backward()
     gradient_entropy_sigma = sigma.grad.data
     print(gradient_entropy_sigma)
     # Compute the final adverserial gradient.
@@ -157,6 +157,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
+    proposal['sigma'] = proposal['sigma'].exp().abs().log()
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -184,7 +185,7 @@ def sample_real_data(p_r, batch_size=256):
         random_index = random.randint(0, num_samples_p_r - 1)
         samples[index, :] = p_r[random_index]
 
-    return torch.autograd.Variable(samples)
+    return torch.autograd.Variable(samples, requires_grad=True)
 
 
 def sample_generated_data(proposal, batch_size=256):
@@ -198,7 +199,7 @@ def sample_generated_data(proposal, batch_size=256):
     for sample_index, theta in enumerate(thetas):
         samples[sample_index, :] = simulator(theta, 1)
 
-    return torch.autograd.Variable(samples)
+    return torch.autograd.Variable(samples, requires_grad=True)
 
 
 def gaussian_logpdf(mu, sigma, theta):
