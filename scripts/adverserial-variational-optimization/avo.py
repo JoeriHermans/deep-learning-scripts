@@ -25,7 +25,8 @@ def main():
         mu = sys.argv[sys.argv.index('--mu') + 1].split(",")
         mu = [float(e) for e in mu]
         proposal['mu'] = mu
-        proposal['sigma'] = [np.log(.1), np.log(.01)]
+        #proposal['sigma'] = [np.log(.1), np.log(.01)]
+        proposal['sigma'] = [.1, .1]
     else:
         # Add random beam energy.
         add_prior_beam_energy(proposal)
@@ -38,7 +39,7 @@ def main():
         proposal['sigma'] = sigma
     else:
         # Initialize default sigma.
-        proposal['sigma'] = [np.log(.1), np.log(.1)]
+        proposal['sigma'] = [.1, .1]
     # Convert the proposal lists to PyTorch Tensors.
     proposal['mu'] = torch.FloatTensor(proposal['mu'])
     proposal['sigma'] = torch.FloatTensor(proposal['sigma'])
@@ -124,7 +125,7 @@ def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=100, batc
     print("Loss: " + str(loss.mean().data.numpy()[0]))
 
 
-def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
+def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=8.0):
     gradient_u_mu = torch.FloatTensor([0, 0])
     gradient_u_sigma = torch.FloatTensor([0, 0])
     gradient_entropy_sigma = torch.FloatTensor([0, 0])
@@ -133,19 +134,19 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the q-gradient for every theta.
     for theta in thetas:
         # Draw a sample from the simulator.
-        x = torch.autograd.Variable(simulator(theta, 1), requires_grad=True)
+        x = torch.autograd.Variable(simulator(theta, 1))
         likelihood_x = critic(x).mean().view(-1)
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
         # Compute the gradient of the Gaussian logpdf.
-        theta = torch.autograd.Variable(normalize(theta), requires_grad=False)
+        theta = torch.autograd.Variable(normalize(theta), requires_grad=True)
         logpdf = gaussian_logpdf(mu, sigma, theta)
         logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
         # Add the logpdf gradient to the current variational upperbound.
-        gradient_u_mu += likelihood_x.data * gradient_logpdf_mu
-        gradient_u_sigma += likelihood_x.data * gradient_logpdf_sigma
+        gradient_u_mu += -likelihood_x.data * gradient_logpdf_mu
+        gradient_u_sigma += -likelihood_x.data * gradient_logpdf_sigma
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
@@ -157,7 +158,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
-    proposal['sigma'] = proposal['sigma'].exp().abs().log()
+    proposal['sigma'] = proposal['sigma'].exp().log()
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -203,17 +204,18 @@ def sample_generated_data(proposal, batch_size=256):
 
 
 def gaussian_logpdf(mu, sigma, theta):
-    sigma = sigma.exp()
-    logpdf = (sigma.log() + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma ** 2))
+    #sigma = sigma.exp()
+    #logpdf = (sigma.log() + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma ** 2))
+    logpdf = (sigma + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma.exp() ** 2))
+
 
     return logpdf
 
 
 def gaussian_differential_entropy(sigma):
-    sigma = sigma.exp()
-    dentropy = (sigma.log() * (2. * np.pi * np.e) ** .5).log()
-    # TODO Fixme.
-    #dentropy = -.5 * ((sigma.log() ** 2 * 2. * np.pi * np.e).log())
+    #sigma = sigma.exp()
+    #dentropy = (sigma.log() * (2. * np.pi * np.e) ** .5).log()
+    dentropy = (sigma * (2. * np.pi * np.e) ** .5).log()
 
     return dentropy
 
@@ -242,6 +244,7 @@ def draw_gaussian(d, num_samples, random_state=None):
     num_parameters = len(d['mu'])
     thetas = torch.zeros((num_samples, num_parameters))
     mu = denormalize(d['mu'])
+    #sigma = d['sigma'].exp()
     sigma = d['sigma'].exp()
     for i in range(0, num_samples):
         gaussian = torch.normal(mu, sigma)
