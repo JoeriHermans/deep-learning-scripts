@@ -57,7 +57,14 @@ class Model(torch.nn.Module):
         return x
 
 
-def build_model(settings):
+def allocate_optimizer(settings, model):
+    """Constructs the optimizer object under the specified settings."""
+    optimizer = torch.optim.Adam(model.parameters())
+
+    return optimizer
+
+
+def allocate_model(settings):
     """Constructs the model under the specified settings."""
     num_features = 10
     num_hidden = 10
@@ -73,8 +80,9 @@ def optimize(settings):
     world_size = settings['world_size']
     num_iterations = settings['num_iterations']
     master_rank = settings['master_rank']
-    # Construst the model from the specified settings.
-    model = build_model(settings)
+    # Construst the model and optimizer from the specified settings.
+    model = allocate_model(settings)
+    optimizer = allocate_optimizer(settings, model)
     # Define the default next and previous rank.
     previous_rank = (rank - 1) % world_size
     next_rank = (rank + 1) % world_size
@@ -105,7 +113,7 @@ def optimize(settings):
 
 def save_model(model):
     """Saves the parameterization of the model to some persistent medium."""
-    # TODO Implement.
+    # TODO Implement to whatever.
     pass
 
 
