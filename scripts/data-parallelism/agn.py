@@ -109,8 +109,8 @@ def optimize(settings):
     for i in range(0, num_iterations):
         receive_parameters(network_buffer, previous_rank)
         add_buffer(delta_buffer, network_buffer)
+        isend_parameters(network_buffer, next_rank)
         set_parameterization(network_buffer, model)
-        send_model(model, next_rank)
         # Do local computations.
         for j in range(0, communication_frequency):
             x = torch.autograd.Variable(torch.FloatTensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]), requires_grad=True)
