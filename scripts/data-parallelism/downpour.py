@@ -272,11 +272,19 @@ def store_argument_key(settings, key, store_in, default=None):
     """Stores the value of the specfied key in the settings map under the 'store_in' key.
     Sets the default value if it is not present.
     """
-    # TODO Fix situation when key is an array.
-    if key in sys.argv and sys.argv.index(key) + 1 < len(sys.argv):
-        settings[store_in] = sys.argv[sys.argv.index(key) + 1]
+    # Check if the specified keys is a list.
+    if type(key) != type([]):
+        keys = [key]
     else:
-        settings[store_in] = default
+        keys = key
+    # For every key in the keys list.
+    for key in keys:
+        if key in sys.argv and sys.argv.index(key) + 1 < len(sys.argv):
+            # From the moment a value has been fetched, exit.
+            settings[store_in] = sys.argv[sys.argv.index(key) + 1]
+            break
+        else:
+            settings[store_in] = default
 
 
 def validate_argument_key(settings, key, type=None):
