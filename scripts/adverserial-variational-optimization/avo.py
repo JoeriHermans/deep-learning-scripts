@@ -101,7 +101,7 @@ def fit(proposal, p_r, critic, theta_true, num_iterations=100000, batch_size=256
         fit_proposal(proposal, p_r, critic, batch_size)
 
 
-def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=1000, batch_size=256):
+def fit_critic(proposal, p_r, critic, optimizer, num_critic_iterations=4000, batch_size=256):
     # Generate the simulation data.
     x_g = sample_generated_data(proposal, batch_size)
     # Fit the critic optimally.
@@ -138,9 +138,9 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
         mu = torch.autograd.Variable(proposal['mu'], requires_grad=True)
         sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
         # Compute the gradient of the Gaussian logpdf.
-        theta = torch.autograd.Variable(normalize(theta))
+        theta = torch.autograd.Variable(normalize(theta), requires_grad=True)
         logpdf = gaussian_logpdf(mu, sigma, theta)
-        logpdf.mean().backward()
+        logpdf.sum().backward()
         gradient_logpdf_mu = mu.grad.data
         gradient_logpdf_sigma = sigma.grad.data
         # Add the logpdf gradient to the current variational upperbound.
@@ -149,7 +149,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Compute the gradient of the entropy.
     sigma = torch.autograd.Variable(proposal['sigma'], requires_grad=True)
     differential_entropy = gaussian_differential_entropy(sigma)
-    differential_entropy.mean().backward()
+    differential_entropy.sum().backward()
     gradient_entropy_sigma = sigma.grad.data
     # Compute the final adverserial gradient.
     gradient_u_mu = .01 * ((1. / batch_size) * gradient_u_mu)
@@ -157,7 +157,7 @@ def fit_proposal(proposal, p_r, critic, batch_size=256, gamma=5.0):
     # Apply the gradient to the proposal distribution.
     proposal['mu'] -= gradient_u_mu
     proposal['sigma'] -= gradient_u_sigma
-    proposal['sigma'] = proposal['sigma'].exp().log() + 0.01
+    #proposal['sigma'] = proposal['sigma'].exp().log() + 0.01
 
 
 def compute_gradient_penalty(critic, real, fake, l=5.0):
@@ -204,8 +204,8 @@ def sample_generated_data(proposal, batch_size=256):
 
 def gaussian_logpdf(mu, sigma, theta):
     #sigma = sigma.exp()
-    #logpdf = (sigma.log() + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma ** 2))
-    logpdf = (sigma + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma.exp() ** 2))
+    #logpdf = -(sigma.log() + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma ** 2))
+    logpdf = -(sigma + np.log((2. * np.pi) ** .5) + (theta - mu) ** 2 / (2. * sigma.exp() ** 2))
 
 
     return logpdf
